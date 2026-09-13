@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chapter 5 · Agents &amp; Agentic AI: From Answering to Acting</title>
+<style>
+  :root{
+    --ink:#0f1b2d; --ink-soft:#3d4f66; --paper:#f6f8fb; --card:#ffffff;
+    --aws-orange:#ff9900; --aws-orange-dark:#e88b00; --blue:#2074d5; --teal:#0d9488;
+    --purple:#7c3aed; --pink:#db2777; --line:#dde5ef; --radius:16px;
+    --shadow:0 4px 18px rgba(15,27,45,.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    background:var(--paper);color:var(--ink);line-height:1.65}
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;background:#eef2f7;
+    border-radius:5px;padding:1px 6px}
+
+  #progress{position:fixed;top:0;left:0;height:4px;width:0;background:var(--aws-orange);z-index:99}
+
+  .topnav{position:sticky;top:0;z-index:50;background:rgba(15,27,45,.92);backdrop-filter:blur(8px);
+    display:flex;align-items:center;gap:18px;padding:12px 24px;color:#c7d5e5;font-size:.85rem}
+  .topnav a{color:#c7d5e5}
+  .topnav a:hover{color:#fff;text-decoration:none}
+  .topnav .crumb{color:#ffb84d;font-weight:700}
+  .topnav .next{margin-left:auto;color:#7f97b0}
+
+  /* ============ HERO ============ */
+  .hero{position:relative;overflow:hidden;color:#fff;
+    background:linear-gradient(135deg,#0f1b2d 0%,#16324f 55%,#1c4d6b 100%);
+    padding:64px 24px 88px;text-align:center}
+  .hero .kicker{display:inline-block;background:rgba(255,153,0,.15);border:1px solid rgba(255,153,0,.5);
+    color:#ffb84d;border-radius:999px;padding:6px 18px;font-size:.8rem;letter-spacing:.14em;
+    text-transform:uppercase;font-weight:700;margin-bottom:20px}
+  .hero h1{font-size:clamp(1.9rem,4.5vw,3rem);font-weight:800;max-width:860px;margin:0 auto 16px}
+  .hero h1 em{font-style:normal;color:var(--aws-orange)}
+  .hero p{max-width:700px;margin:0 auto;color:#c7d5e5;font-size:1.05rem}
+  .mesh{position:absolute;inset:0;pointer-events:none;opacity:.45}
+  .mesh circle{fill:var(--aws-orange);animation:pulse 3s ease-in-out infinite}
+  .mesh circle:nth-of-type(2n){fill:#4dd0e1;animation-delay:.8s}
+  .mesh line{stroke:#5b7793;stroke-width:1;opacity:.35}
+  .mesh .flow{fill:none;stroke:var(--aws-orange);stroke-width:2;stroke-linecap:round;
+    stroke-dasharray:6 120;animation:dashflow 4s linear infinite;opacity:.9}
+  @keyframes pulse{0%,100%{opacity:.35;r:3}50%{opacity:1;r:5}}
+  @keyframes dashflow{to{stroke-dashoffset:-126}}
+
+  /* ============ LAYOUT ============ */
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  section{padding:60px 0 20px}
+  .section-tag{display:inline-block;font-size:.75rem;font-weight:800;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--aws-orange-dark);margin-bottom:8px}
+  h2{font-size:1.7rem;font-weight:800;margin-bottom:12px}
+  h3{font-size:1.1rem;font-weight:800}
+  .lede{color:var(--ink-soft);max-width:780px;margin-bottom:28px;font-size:1.02rem}
+  .anim-caption{text-align:center;color:var(--ink-soft);font-size:.9rem;margin:6px 0 22px}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:26px;margin-bottom:22px;
+    opacity:0;transform:translateY(20px);transition:opacity .5s ease,transform .5s ease}
+  .panel.visible{opacity:1;transform:none}
+
+  .callout{border-left:6px solid var(--aws-orange);background:#fff8ec;border-radius:12px;
+    padding:16px 20px;margin:20px 0;font-size:.94rem;color:#6b4b0e}
+  .callout b{color:#8a5b00}
+  .callout.blue{border-color:var(--blue);background:#eef5fd;color:#1d4c7c}
+  .callout.blue b{color:#164a80}
+  .callout.red{border-color:#dc2626;background:#fdf1f1;color:#7c2d2d}
+  .callout.red b{color:#b91c1c}
+
+  /* ============ CHATBOT VS AGENT ============ */
+  .versus{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  @media (max-width:760px){.versus{grid-template-columns:1fr}}
+  .vs-col{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px}
+  .vs-col h4{font-size:1rem;margin-bottom:12px;display:flex;gap:8px;align-items:center}
+  .vs-msg{border-radius:12px;padding:11px 15px;font-size:.87rem;margin-bottom:9px}
+  .vs-msg.u{background:#e8eef7}
+  .vs-msg.b{background:#101d31;color:#d7e3f0}
+  .vs-msg .act{display:inline-block;background:rgba(255,153,0,.16);border:1px solid rgba(255,153,0,.5);
+    color:#c77800;border-radius:999px;padding:2px 11px;font-size:.74rem;font-weight:700;margin:3px 4px 0 0}
+  .vs-msg.b .act{color:#ffb84d}
+
+  /* ============ AGENT LOOP DIAGRAM ============ */
+  .loop-svg{width:100%;max-width:640px;height:auto;display:block;margin:0 auto}
+  .loop-svg .node{fill:#fff;stroke:var(--line);stroke-width:1.5;filter:drop-shadow(0 3px 8px rgba(15,27,45,.10))}
+  .loop-svg .nlabel{font-size:13px;font-weight:800;fill:var(--ink)}
+  .loop-svg .nsub{font-size:10px;fill:var(--ink-soft)}
+  .loop-svg .orbit{fill:none;stroke:#9fb2c8;stroke-width:2;stroke-dasharray:5 6}
+  .loop-svg .runner{fill:var(--aws-orange);animation:orbitrun 6s linear infinite}
+  @keyframes orbitrun{
+    0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}
+  }
+  .loop-svg .exit{stroke:#0d9488;stroke-width:2;stroke-dasharray:5 6}
+
+  /* ============ INTERACTIVE TRACE ============ */
+  .trace{display:grid;grid-template-columns:1.05fr .95fr;gap:24px}
+  @media (max-width:820px){.trace{grid-template-columns:1fr}}
+  .trace-log{background:#101d31;border-radius:14px;padding:18px;min-height:380px;
+    font-size:.83rem;line-height:1.55;color:#d7e3f0;display:flex;flex-direction:column;gap:9px}
+  .t-entry{border-left:4px solid var(--tc,#888);border-radius:8px;background:rgba(255,255,255,.05);
+    padding:9px 13px;opacity:0;transform:translateY(8px);transition:opacity .45s ease,transform .45s ease}
+  .t-entry.show{opacity:1;transform:none}
+  .t-entry .tt{display:block;font-size:.66rem;font-weight:800;letter-spacing:.09em;
+    text-transform:uppercase;color:var(--tc);margin-bottom:2px}
+  .t-think{--tc:#b388ff}.t-act{--tc:#ffb84d}.t-obs{--tc:#4dd0e1}
+  .t-done{--tc:#7ee0c2}.t-user{--tc:#f48fb1}
+  .trace-ctl{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .tbtn{background:var(--ink);color:#fff;border:none;border-radius:999px;padding:9px 24px;
+    font-size:.86rem;font-weight:700;cursor:pointer}
+  .tbtn:hover{background:#22344e}
+  .tbtn:disabled{opacity:.4;cursor:default}
+  .tbtn.alt{background:var(--paper);color:var(--ink-soft);border:1px solid var(--line)}
+  .trace-side h4{margin-bottom:10px}
+  .tool-list{list-style:none}
+  .tool-list li{display:flex;gap:12px;align-items:flex-start;background:var(--paper);
+    border:1px solid var(--line);border-radius:12px;padding:11px 14px;margin-bottom:9px;
+    font-size:.85rem;transition:box-shadow .3s ease,border-color .3s ease}
+  .tool-list li.active{border-color:var(--aws-orange);box-shadow:0 0 0 3px rgba(255,153,0,.18)}
+  .tool-list .ti{font-size:1.2rem}
+  .tool-list b{display:block;font-size:.85rem}
+  .tool-list span{color:var(--ink-soft);font-size:.78rem}
+  .step-note{font-size:.85rem;color:var(--ink-soft);margin-top:10px;min-height:44px}
+
+  /* ============ CARDS ============ */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:20px;box-shadow:var(--shadow);position:relative;overflow:hidden;
+    opacity:0;transform:translateY(20px)}
+  .card.visible{opacity:1;transform:none;transition:opacity .5s ease,transform .5s ease,box-shadow .25s ease}
+  .card.visible:hover{transform:translateY(-5px);box-shadow:0 12px 28px rgba(15,27,45,.14)}
+  .card::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;
+    background:linear-gradient(90deg,var(--accent,#ff9900),transparent 80%)}
+  .card h4{font-size:1.02rem;margin-bottom:6px}
+  .card p{font-size:.9rem;color:var(--ink-soft)}
+  .card .oneliner{display:block;font-size:.78rem;font-weight:700;color:var(--accent,var(--aws-orange-dark));
+    text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+  .card .use{margin-top:12px;font-size:.8rem;background:var(--paper);border-radius:10px;padding:9px 12px;
+    border:1px dashed var(--line);color:var(--ink-soft)}
+  .card .use b{color:var(--ink)}
+  .m-blue{--accent:var(--blue)} .m-purple{--accent:var(--purple)} .m-teal{--accent:var(--teal)}
+  .m-pink{--accent:var(--pink)} .m-amber{--accent:#b45309} .m-sky{--accent:#0369a1}
+
+  /* ============ MCP DIAGRAM ============ */
+  .mcp-svg{width:100%;max-width:760px;height:auto;display:block;margin:0 auto}
+  .mcp-svg .box{fill:#fff;stroke:var(--line);stroke-width:1.5;rx:12;filter:drop-shadow(0 3px 8px rgba(15,27,45,.10))}
+  .mcp-svg .label{font-size:12.5px;font-weight:700;fill:var(--ink)}
+  .mcp-svg .sub{font-size:10px;fill:var(--ink-soft)}
+  .mcp-svg .plug{stroke:var(--purple);stroke-width:2.5;fill:none;animation:plugpulse 2.6s ease-in-out infinite}
+  @keyframes plugpulse{0%,100%{stroke-opacity:.45}50%{stroke-opacity:1}}
+  .mcp-svg .bit{fill:var(--purple);animation:bitflow 3.4s linear infinite}
+  .mcp-svg .bit.b2{animation-delay:1.1s}.mcp-svg .bit.b3{animation-delay:2.2s}
+  @keyframes bitflow{0%{transform:translateX(0);opacity:0}10%{opacity:1}90%{opacity:1}100%{transform:translateX(180px);opacity:0}}
+
+  /* ============ SAFETY ============ */
+  .safety{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
+  .safe-card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:var(--shadow);padding:18px;font-size:.88rem}
+  .safe-card .si{font-size:1.5rem}
+  .safe-card h4{font-size:.95rem;margin:8px 0 4px}
+  .safe-card p{color:var(--ink-soft);font-size:.84rem}
+
+  /* ============ ANTIPATTERNS ============ */
+  .anti{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--line);border-radius:14px;
+    overflow:hidden;font-size:.88rem}
+  @media (max-width:700px){.anti{grid-template-columns:1fr}}
+  .anti > div{padding:14px 18px;border-bottom:1px solid var(--line)}
+  .anti .bad{background:#fdf1f1;color:#7c2d2d}
+  .anti .good{background:#f0f9f4;color:#1c5c3c}
+  .anti .bad::before{content:"✗ ";font-weight:800;color:#b91c1c}
+  .anti .good::before{content:"✓ ";font-weight:800;color:#15803d}
+  .anti > div:nth-last-child(-n+2){border-bottom:none}
+
+  /* ============ CODE ============ */
+  .codeblock{background:#101d31;border-radius:14px;padding:20px 22px;overflow-x:auto;margin:14px 0}
+  .codeblock pre{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.82rem;line-height:1.6;color:#d7e3f0}
+  .codeblock .c{color:#7f97b0}.codeblock .k{color:#ffb84d}.codeblock .s{color:#7ee0c2}
+
+  /* ============ LAB / RECAP ============ */
+  .lab{background:linear-gradient(135deg,#0d3b34,#0d9488);color:#fff;border-radius:20px;padding:30px;margin:26px 0}
+  .lab h3{font-size:1.25rem;margin-bottom:10px}
+  .lab p{color:#cdeee8;font-size:.95rem;margin-bottom:8px}
+  .lab a{color:#aef3e2;font-weight:700}
+  .recap{background:#0f1b2d;color:#fff;border-radius:20px;padding:34px;margin:48px 0 16px}
+  .recap h3{font-size:1.3rem;margin-bottom:14px}
+  .recap ol{margin-left:22px;color:#c7d5e5}
+  .recap li{margin-bottom:8px}
+  .recap b{color:#ffb84d}
+  .nav-btns{display:flex;justify-content:space-between;gap:14px;margin-top:22px;flex-wrap:wrap}
+  .next-btn{display:inline-block;background:var(--aws-orange);color:#0f1b2d;font-weight:800;
+    padding:12px 28px;border-radius:999px;transition:transform .2s ease}
+  .next-btn:hover{transform:translateY(-2px);text-decoration:none}
+  .next-btn.ghost{background:transparent;color:#c7d5e5;border:1px solid #46617f}
+  footer{padding:28px 24px 48px;text-align:center;color:var(--ink-soft);font-size:.85rem}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<nav class="topnav">
+  <a href="index.html">⌂ Course home</a>
+  <span>›</span>
+  <span class="crumb">Chapter 5 · Agents &amp; Agentic AI</span>
+  <span class="next"><a href="chapter-04-rag-knowledge-bases.html">← Ch. 4</a> · <a href="chapter-06-guardrails-responsible-ai.html">Ch. 6 →</a></span>
+</nav>
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <svg class="mesh" viewBox="0 0 1200 420" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <line x1="120" y1="80" x2="320" y2="180"/><line x1="320" y1="180" x2="560" y2="90"/>
+    <line x1="560" y1="90" x2="820" y2="200"/><line x1="820" y1="200" x2="1080" y2="100"/>
+    <line x1="200" y1="330" x2="460" y2="260"/><line x1="460" y1="260" x2="740" y2="340"/>
+    <path class="flow" d="M120 80 L320 180 L560 90 L820 200 L1080 100"/>
+    <path class="flow" style="animation-delay:2s" d="M200 330 L460 260 L740 340"/>
+    <circle cx="120" cy="80" r="4"/><circle cx="320" cy="180" r="4"/><circle cx="560" cy="90" r="4"/>
+    <circle cx="820" cy="200" r="4"/><circle cx="1080" cy="100" r="4"/><circle cx="460" cy="260" r="4"/>
+  </svg>
+  <div style="position:relative">
+    <span class="kicker">AWS Generative AI · Chapter 5</span>
+    <h1>Agents &amp; Agentic AI: <em>From Answering to Acting</em></h1>
+    <p>RAG made the model informed. Agents make it <strong>useful</strong> — able to look things up,
+       call your APIs, and finish multi-step tasks. This chapter shows how agents work, the AWS ways
+       to build them, and the guardrails that keep them on a leash.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ================= 5.1 WHAT IS AN AGENT ================= -->
+<section id="what">
+  <span class="section-tag">5.1 · The leap</span>
+  <h2>A chatbot tells you. An agent does it.</h2>
+  <p class="lede">Everything so far has been <em>one question → one answer</em>. An <strong>agent</strong> wraps the
+  model in a loop and hands it <strong>tools</strong> — functions it may call. Given a goal, it plans steps,
+  executes them, checks results, and keeps going until the job is done. Same ticket, two experiences:</p>
+
+  <div class="panel versus">
+    <div class="vs-col">
+      <h4>💬 Chatbot (Chapters 2–4)</h4>
+      <div class="vs-msg u">"Extend contractor J. Rivera's VPN access by 30 days."</div>
+      <div class="vs-msg b">"To extend contractor VPN access, you need sponsor approval per SEC-VPN-007.
+      Submit form AC-31 in the Access Portal, then IT will…"</div>
+      <div class="vs-msg u" style="opacity:.65">…and now a human does five manual steps.</div>
+    </div>
+    <div class="vs-col">
+      <h4>🤖 Agent (this chapter)</h4>
+      <div class="vs-msg u">"Extend contractor J. Rivera's VPN access by 30 days."</div>
+      <div class="vs-msg b">
+        <span class="act">🔍 looked up user</span><span class="act">📋 checked policy</span>
+        <span class="act">✉️ requested sponsor approval</span><span class="act">🔑 scheduled extension</span><br>
+        "Done. Sponsor approved at 14:02; access extended to Oct 14 and logged as change CHG-4482."
+      </div>
+    </div>
+  </div>
+
+  <div class="callout"><b>On-prem analogy:</b> a chatbot is a knowledge-base article; an agent is the runbook
+  <em>plus the engineer executing it</em>. The formula to remember:
+  <b>Agent = Model (reasoning) + Tools (your APIs) + Loop (keep going) + Memory (context across steps)</b>.</div>
+</section>
+
+<!-- ================= 5.2 THE LOOP ================= -->
+<section id="loop">
+  <span class="section-tag">5.2 · The engine</span>
+  <h2>The agent loop: Think → Act → Observe</h2>
+  <p class="lede">Under the hood, almost every agent runs the same cycle (the research name is
+  <strong>ReAct</strong> — Reason + Act). The model never executes anything itself — it <em>requests</em> a tool
+  call; <em>your code</em> executes it and feeds the result back.</p>
+
+  <div class="panel">
+    <svg class="loop-svg" viewBox="0 0 640 380" role="img" aria-label="Animated agent loop: think, act, observe, repeated until the goal is met, then respond">
+      <ellipse class="orbit" cx="290" cy="195" rx="185" ry="130"/>
+      <!-- nodes -->
+      <g>
+        <rect class="node" x="215" y="25" width="150" height="62" rx="12"/>
+        <text class="nlabel" x="290" y="51" text-anchor="middle">1 · THINK</text>
+        <text class="nsub" x="290" y="70" text-anchor="middle">model plans next step</text>
+      </g>
+      <g>
+        <rect class="node" x="440" y="165" width="150" height="62" rx="12"/>
+        <text class="nlabel" x="515" y="191" text-anchor="middle">2 · ACT</text>
+        <text class="nsub" x="515" y="210" text-anchor="middle">requests a tool call</text>
+      </g>
+      <g>
+        <rect class="node" x="215" y="298" width="150" height="62" rx="12"/>
+        <text class="nlabel" x="290" y="324" text-anchor="middle">3 · OBSERVE</text>
+        <text class="nsub" x="290" y="343" text-anchor="middle">your code returns the result</text>
+      </g>
+      <g>
+        <rect class="node" x="20" y="165" width="130" height="62" rx="12" stroke="#0d9488" stroke-width="2"/>
+        <text class="nlabel" x="85" y="191" text-anchor="middle" fill="#0d9488">DONE?</text>
+        <text class="nsub" x="85" y="210" text-anchor="middle">goal met → respond</text>
+      </g>
+      <!-- runner -->
+      <g class="runner" style="transform-origin:290px 195px">
+        <circle cx="290" cy="65" r="8"/>
+      </g>
+      <line class="exit" x1="105" y1="160" x2="230" y2="80"/>
+    </svg>
+    <p class="anim-caption">The orange dot is one task cycling the loop. Each lap = one model call + one tool call.
+    More laps = more capability — and more tokens, latency, and risk. That tradeoff is agent engineering.</p>
+  </div>
+</section>
+
+<!-- ================= 5.3 TRACE ================= -->
+<section id="trace">
+  <span class="section-tag">5.3 · Watch it work</span>
+  <h2>Interactive: step through a real agent run</h2>
+  <p class="lede">The VPN-extension request from 5.1, as the agent actually executes it.
+  <strong>Click "Next step"</strong> to advance the loop; watch which tool lights up on the right.</p>
+
+  <div class="panel trace">
+    <div>
+      <div class="trace-log" id="traceLog"></div>
+      <div class="trace-ctl">
+        <button class="tbtn" id="stepBtn">Next step →</button>
+        <button class="tbtn alt" id="resetBtn">↺ Reset</button>
+      </div>
+      <p class="step-note" id="stepNote">The agent has received its goal. Press "Next step" to see its first thought.</p>
+    </div>
+    <div class="trace-side">
+      <h4>🧰 The agent's toolbox</h4>
+      <ul class="tool-list">
+        <li id="tool-directory"><span class="ti">🔍</span>
+          <div><b>lookup_user(name)</b><span>Queries the identity directory (Lambda → LDAP/IAM Identity Center)</span></div></li>
+        <li id="tool-kb"><span class="ti">📚</span>
+          <div><b>search_policy(query)</b><span>Bedrock Knowledge Base — the RAG retriever from Chapter 4</span></div></li>
+        <li id="tool-approval"><span class="ti">✉️</span>
+          <div><b>request_approval(mgr, req)</b><span>Human-in-the-loop: SNS → sponsor, waits for a decision</span></div></li>
+        <li id="tool-vpn"><span class="ti">🔑</span>
+          <div><b>extend_vpn(user, days)</b><span>Calls the network team's API; writes a change record</span></div></li>
+      </ul>
+      <p class="step-note">Each tool is just a Lambda function or API with a typed schema —
+      the model picks <em>which</em> to call and with <em>what arguments</em>; your code does the rest.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 5.4 TOOLS / FUNCTION CALLING ================= -->
+<section id="tools">
+  <span class="section-tag">5.4 · The mechanics</span>
+  <h2>Tool use (function calling): the contract</h2>
+  <p class="lede">You describe each tool to the model — name, purpose, JSON parameter schema. When the model wants
+  to use one, it responds not with prose but with a structured <code>toolUse</code> request. The Converse API
+  makes this a first-class citizen:</p>
+
+  <div class="codeblock"><pre><span class="c"># 1. Describe the tool (the contract)</span>
+tools = [{<span class="s">"toolSpec"</span>: {
+    <span class="s">"name"</span>: <span class="s">"extend_vpn"</span>,
+    <span class="s">"description"</span>: <span class="s">"Extend a contractor's VPN access. Requires prior sponsor approval."</span>,
+    <span class="s">"inputSchema"</span>: {<span class="s">"json"</span>: {
+        <span class="s">"type"</span>: <span class="s">"object"</span>,
+        <span class="s">"properties"</span>: {<span class="s">"username"</span>: {<span class="s">"type"</span>: <span class="s">"string"</span>},
+                       <span class="s">"days"</span>: {<span class="s">"type"</span>: <span class="s">"integer"</span>, <span class="s">"maximum"</span>: 30}},
+        <span class="s">"required"</span>: [<span class="s">"username"</span>, <span class="s">"days"</span>]}}}}]
+
+<span class="c"># 2. The model responds with a request — not an action</span>
+resp = bedrock.converse(modelId=MODEL, messages=msgs, toolConfig={<span class="s">"tools"</span>: tools})
+<span class="c"># → {"toolUse": {"name": "extend_vpn", "input": {"username": "jrivera", "days": 30}}}</span>
+
+<span class="c"># 3. YOUR code validates and executes, then returns the result to the model</span>
+result = extend_vpn(**tool_input)          <span class="c"># ← IAM permissions live HERE, not in the model</span>
+msgs.append(tool_result_message(result))   <span class="c"># loop continues…</span></pre></div>
+
+  <div class="callout red"><b>The security line that matters:</b> the model <em>suggests</em>; your code
+  <em>executes</em>. Validate every argument (that <code>maximum: 30</code> is doing real work), and scope the
+  executing role's IAM permissions to exactly what the tool needs. The agent's power is your Lambda's IAM policy —
+  nothing more.</div>
+</section>
+
+<!-- ================= 5.5 MCP ================= -->
+<section id="mcp">
+  <span class="section-tag">5.5 · The standard</span>
+  <h2>MCP: a USB-C port for tools</h2>
+  <p class="lede">Writing bespoke tool integrations for every agent doesn't scale. The
+  <strong>Model Context Protocol (MCP)</strong> is an open standard: wrap a system once as an
+  <em>MCP server</em>, and any MCP-aware agent can use it — same idea as USB-C replacing a drawer of
+  proprietary cables.</p>
+
+  <div class="panel">
+    <svg class="mcp-svg" viewBox="0 0 760 250" role="img" aria-label="Animated diagram: agents connect through MCP to servers wrapping enterprise systems">
+      <rect class="box" x="20" y="40" width="150" height="56"/>
+      <text class="label" x="95" y="64" text-anchor="middle">Strands agent</text>
+      <text class="sub" x="95" y="82" text-anchor="middle">your Python code</text>
+      <rect class="box" x="20" y="150" width="150" height="56"/>
+      <text class="label" x="95" y="174" text-anchor="middle">Bedrock agent</text>
+      <text class="sub" x="95" y="192" text-anchor="middle">managed</text>
+
+      <rect x="300" y="80" width="150" height="90" rx="14" fill="#f3edff" stroke="#7c3aed" stroke-width="2"/>
+      <text class="label" x="375" y="118" text-anchor="middle" fill="#7c3aed">MCP</text>
+      <text class="sub" x="375" y="136" text-anchor="middle">one protocol:</text>
+      <text class="sub" x="375" y="151" text-anchor="middle">tools · resources · prompts</text>
+
+      <rect class="box" x="580" y="18" width="160" height="52"/>
+      <text class="label" x="660" y="40" text-anchor="middle">Ticketing MCP server</text>
+      <text class="sub" x="660" y="57" text-anchor="middle">Lambda (stateless)</text>
+      <rect class="box" x="580" y="98" width="160" height="52"/>
+      <text class="label" x="660" y="120" text-anchor="middle">Database MCP server</text>
+      <text class="sub" x="660" y="137" text-anchor="middle">ECS (long-lived)</text>
+      <rect class="box" x="580" y="178" width="160" height="52"/>
+      <text class="label" x="660" y="200" text-anchor="middle">On-prem CMDB server</text>
+      <text class="sub" x="660" y="217" text-anchor="middle">via Direct Connect / VPN</text>
+
+      <path class="plug" d="M172 68 C 240 68 240 105 298 110"/>
+      <path class="plug" d="M172 178 C 240 178 240 145 298 140"/>
+      <path class="plug" d="M452 105 C 510 100 510 48 578 44"/>
+      <path class="plug" d="M452 125 C 510 124 510 124 578 124"/>
+      <path class="plug" d="M452 145 C 510 150 510 202 578 204"/>
+      <circle class="bit" cx="460" cy="124" r="5"/>
+      <circle class="bit b2" cx="460" cy="124" r="5"/>
+      <circle class="bit b3" cx="460" cy="124" r="5"/>
+    </svg>
+    <p class="anim-caption">Build the CMDB integration once; every agent in the company can use it.
+    Note the last server — MCP is also how agents reach systems <em>still on-prem</em> mid-migration.</p>
+  </div>
+</section>
+
+<!-- ================= 5.6 AWS OPTIONS ================= -->
+<section id="options">
+  <span class="section-tag">5.6 · Building on AWS</span>
+  <h2>Three ways to build agents (and when to mix them)</h2>
+  <div class="grid">
+    <div class="card m-blue">
+      <h4>🧩 Strands Agents</h4>
+      <span class="oneliner">Code-first · open source</span>
+      <p>AWS's open-source Python SDK: define an agent in a few lines — model + tools + prompt. MCP-native,
+      works with Bedrock or any model. You own the loop.</p>
+      <div class="use"><b>Pick when:</b> developers want full control and testability — the "write the runbook yourself" path.</div>
+    </div>
+    <div class="card m-teal">
+      <h4>🛠️ Amazon Bedrock Agents</h4>
+      <span class="oneliner">Managed &amp; console-driven</span>
+      <p>Define instructions, attach action groups (Lambda/OpenAPI) and Knowledge Bases; AWS runs the loop,
+      memory, and orchestration. Built-in trace view for debugging.</p>
+      <div class="use"><b>Pick when:</b> you want the fastest managed path with the least code.</div>
+    </div>
+    <div class="card m-purple">
+      <h4>🏗️ Bedrock AgentCore</h4>
+      <span class="oneliner">Production infrastructure</span>
+      <p>Framework-agnostic runtime for <em>any</em> agent (Strands, LangGraph, CrewAI…): secure serverless
+      execution, session isolation, memory, identity, gateway to tools, and observability.</p>
+      <div class="use"><b>Pick when:</b> moving agents from laptop demos to production — it's the "EKS for agents."</div>
+    </div>
+    <div class="card m-pink">
+      <h4>👥 Multi-agent patterns</h4>
+      <span class="oneliner">Divide and conquer</span>
+      <p>A supervisor agent routes work to specialists (billing agent, network agent, security agent).
+      Bedrock supports supervisor/collaborator natively; Strands composes agents as tools.</p>
+      <div class="use"><b>Pick when:</b> one agent's toolbox gets too big — same reason you split a monolith.</div>
+    </div>
+    <div class="card m-amber">
+      <h4>⚙️ Step Functions orchestration</h4>
+      <span class="oneliner">Deterministic backbone</span>
+      <p>For workflows that are <em>mostly</em> fixed with a few AI decisions, keep Step Functions in charge and
+      call Bedrock at the branching points. Predictable, auditable, cheap.</p>
+      <div class="use"><b>Pick when:</b> the process is regulated or well-known — don't buy a loop you don't need.</div>
+    </div>
+  </div>
+
+  <div class="callout blue"><b>Decision shortcut:</b> known process, few decisions → <b>Step Functions + Bedrock</b>.
+  Open-ended tasks, developer team → <b>Strands on AgentCore</b>. Fast managed start → <b>Bedrock Agents</b>.
+  These compose: many production systems use all three.</div>
+</section>
+
+<!-- ================= 5.7 SAFETY ================= -->
+<section id="safety">
+  <span class="section-tag">5.7 · Keeping the leash on</span>
+  <h2>Agent safety: autonomy needs brakes</h2>
+  <p class="lede">An agent is automation that <em>decides its own steps</em> — so it gets the controls you'd give
+  a new operator with a pager: limited permissions, supervision, and a hard stop.</p>
+  <div class="safety">
+    <div class="safe-card"><span class="si">🔐</span><h4>Least-privilege IAM</h4>
+      <p>The tool's execution role defines the blast radius. Read-only tools by default; write tools scoped to specific resources.</p></div>
+    <div class="safe-card"><span class="si">🛑</span><h4>Stopping conditions</h4>
+      <p>Max loop iterations, token budgets, and timeouts. A confused agent must fail fast, not spiral (and bill) forever.</p></div>
+    <div class="safe-card"><span class="si">🙋</span><h4>Human-in-the-loop</h4>
+      <p>Irreversible or costly actions (delete, pay, grant access) pause for approval — like change advisory board, but per-action.</p></div>
+    <div class="safe-card"><span class="si">🛡️</span><h4>Guardrails on I/O</h4>
+      <p>Bedrock Guardrails filter both user input and agent output — prompt-injection attempts included. Chapter 6 goes deep.</p></div>
+    <div class="safe-card"><span class="si">📜</span><h4>Full tracing</h4>
+      <p>Log every thought, tool call, and result (Bedrock agent traces / AgentCore observability). If you can't replay it, you can't debug or audit it.</p></div>
+    <div class="safe-card"><span class="si">🧪</span><h4>Evaluate task completion</h4>
+      <p>Test agents on scripted scenarios: task completion rate, wrong-tool calls, runaway loops — before and after every change.</p></div>
+  </div>
+
+  <div class="panel" style="padding:0;overflow:hidden;margin-top:22px">
+    <div class="anti">
+      <div class="bad">One mega-agent with 40 tools "to be safe"</div>
+      <div class="good">Few tools per agent; split into specialists when the toolbox grows past ~10</div>
+      <div class="bad">Agent's role has <code>AdministratorAccess</code> "for the demo"</div>
+      <div class="good">Per-tool roles with the minimum actions on the minimum resources</div>
+      <div class="bad">Trusting tool arguments because "the model is smart"</div>
+      <div class="good">Validate every argument against schema and business rules before executing</div>
+      <div class="bad">No iteration cap — the agent "will figure it out"</div>
+      <div class="good">Hard limits: N loops, T seconds, $ budget; alert on hitting any of them</div>
+      <div class="bad">Shipping an agent nobody can observe</div>
+      <div class="good">Traces on day one — every step logged, queryable, and replayable</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= LAB ================= -->
+<section id="lab">
+  <div class="lab">
+    <h3>🧪 Hands-on lab (~75 min)</h3>
+    <p>1. In the Bedrock console, create an <strong>Agent</strong> with instructions like the triage assistant from
+    Chapter 3, attach your Chapter 4 <strong>Knowledge Base</strong>, and add an action group backed by a simple
+    Lambda (e.g., <code>get_ticket_status</code>).</p>
+    <p>2. Use the built-in <strong>trace view</strong> while testing — match what you see to the Think → Act → Observe
+    loop from section 5.2.</p>
+    <p>3. Code-first path: <code>pip install strands-agents</code> and build the same agent in ~20 lines with the
+    <a href="https://strandsagents.com/" target="_blank" rel="noopener">Strands SDK</a>.</p>
+    <p>4. Go further with the <a href="https://github.com/awslabs/amazon-bedrock-agent-samples" target="_blank" rel="noopener">Bedrock agent samples</a> and the agents module of the
+    <a href="https://catalog.workshops.aws/building-with-amazon-bedrock/en-US" target="_blank" rel="noopener">Building with Amazon Bedrock workshop</a>.</p>
+  </div>
+</section>
+
+<!-- ================= RECAP ================= -->
+<section id="recap">
+  <div class="recap">
+    <h3>🎯 Chapter 5 takeaways</h3>
+    <ol>
+      <li><b>Agent = model + tools + loop + memory.</b> A chatbot explains the runbook; an agent executes it.</li>
+      <li>The engine is <b>Think → Act → Observe</b> (ReAct), repeating until the goal is met. Each lap costs tokens, latency, and risk.</li>
+      <li>Tool use is a <b>contract</b>: the model requests, <b>your code validates and executes</b> — IAM and argument validation are the real security boundary.</li>
+      <li><b>MCP</b> is the USB-C of tools: wrap a system once, every agent can use it — including systems still on-prem.</li>
+      <li>Three AWS paths that compose: <b>Strands</b> (code-first), <b>Bedrock Agents</b> (managed), <b>AgentCore</b> (production runtime) — with Step Functions when the process is mostly deterministic.</li>
+      <li>Safety is non-negotiable: least-privilege IAM, stopping conditions, human approval for irreversible actions, and <b>full traces from day one</b>.</li>
+    </ol>
+    <div class="nav-btns">
+      <a class="next-btn ghost" href="chapter-04-rag-knowledge-bases.html">← Chapter 4: RAG &amp; Knowledge Bases</a>
+      <a class="next-btn" href="chapter-06-guardrails-responsible-ai.html">Next → Chapter 6: Guardrails &amp; Responsible AI</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  AWS GenAI for IT Professionals · Chapter 5 of 12 · Agent capabilities evolve fast — verify in the
+  <a href="https://docs.aws.amazon.com/bedrock/latest/userguide/agents.html" target="_blank" rel="noopener">Bedrock Agents documentation</a> and
+  <a href="https://strandsagents.com/" target="_blank" rel="noopener">Strands docs</a>.
+</footer>
+
+<script>
+  // Scroll progress
+  const bar = document.getElementById('progress');
+  addEventListener('scroll', () => {
+    const h = document.documentElement;
+    bar.style.width = (h.scrollTop / (h.scrollHeight - h.clientHeight) * 100) + '%';
+  }, {passive:true});
+
+  // Reveal on scroll
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); } });
+  }, {threshold:.12});
+  document.querySelectorAll('.panel, .card').forEach((el, i) => {
+    el.style.transitionDelay = (i % 5) * 60 + 'ms';
+    io.observe(el);
+  });
+
+  // ---------- Interactive agent trace ----------
+  const steps = [
+    {cls:'t-user',  tag:'Goal', text:'"Extend contractor J. Rivera\'s VPN access by 30 days."',
+     tool:null, note:'The goal enters the loop as the first user message.'},
+    {cls:'t-think', tag:'Think', text:'I need the contractor\'s account first. I\'ll look up "J. Rivera" in the directory.',
+     tool:null, note:'THINK: the model reasons in text — nothing has executed yet.'},
+    {cls:'t-act',   tag:'Act · lookup_user', text:'lookup_user(name="J. Rivera")',
+     tool:'tool-directory', note:'ACT: a structured toolUse request. Your Lambda runs the actual query.'},
+    {cls:'t-obs',   tag:'Observe', text:'{"username":"jrivera","type":"contractor","vpn_expires":"2026-09-14","sponsor":"m.chen"}',
+     tool:'tool-directory', note:'OBSERVE: the tool result goes back into the conversation as context.'},
+    {cls:'t-think', tag:'Think', text:'Contractor confirmed, expires soon. Policy check: is a 30-day extension allowed, and what approvals are needed?',
+     tool:null, note:'The agent decides it needs policy knowledge — time for RAG.'},
+    {cls:'t-act',   tag:'Act · search_policy', text:'search_policy(query="contractor VPN extension approval requirements")',
+     tool:'tool-kb', note:'The Chapter 4 Knowledge Base is just another tool in the toolbox.'},
+    {cls:'t-obs',   tag:'Observe', text:'SEC-VPN-007 §3.2: extensions ≤30 days permitted with sponsoring manager approval, renewable once.',
+     tool:'tool-kb', note:'Grounded policy retrieved — with a citation for the audit trail.'},
+    {cls:'t-act',   tag:'Act · request_approval', text:'request_approval(mgr="m.chen", req="Extend jrivera VPN +30d per SEC-VPN-007")',
+     tool:'tool-approval', note:'HUMAN-IN-THE-LOOP: irreversible/privileged action pauses for a person.'},
+    {cls:'t-obs',   tag:'Observe', text:'{"decision":"APPROVED","by":"m.chen","at":"14:02Z"}',
+     tool:'tool-approval', note:'The sponsor approved. Now — and only now — the agent may act.'},
+    {cls:'t-act',   tag:'Act · extend_vpn', text:'extend_vpn(username="jrivera", days=30)',
+     tool:'tool-vpn', note:'The write action executes under a tightly-scoped IAM role.'},
+    {cls:'t-obs',   tag:'Observe', text:'{"status":"ok","new_expiry":"2026-10-14","change_record":"CHG-4482"}',
+     tool:'tool-vpn', note:'Change logged. The loop checks: is the goal met? Yes.'},
+    {cls:'t-done',  tag:'Respond', text:'"Done. Sponsor approved at 14:02; jrivera\'s VPN access extended to 2026-10-14 (change CHG-4482, per SEC-VPN-007 §3.2)."',
+     tool:null, note:'Goal met → exit the loop and answer, citing every step it took.'}
+  ];
+  const log = document.getElementById('traceLog');
+  const stepBtn = document.getElementById('stepBtn'), resetBtn = document.getElementById('resetBtn');
+  const note = document.getElementById('stepNote');
+  let idx = 0;
+  function highlight(toolId){
+    document.querySelectorAll('.tool-list li').forEach(li =>
+      li.classList.toggle('active', li.id === toolId));
+  }
+  function reset(){
+    idx = 0; log.innerHTML = ''; highlight(null);
+    stepBtn.disabled = false;
+    note.textContent = 'The agent has received its goal. Press "Next step" to see its first thought.';
+  }
+  stepBtn.addEventListener('click', () => {
+    if (idx >= steps.length) return;
+    const s = steps[idx];
+    const el = document.createElement('div');
+    el.className = 't-entry ' + s.cls;
+    el.innerHTML = `<span class="tt">${s.tag}</span>${s.text}`;
+    log.appendChild(el);
+    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('show')));
+    log.scrollTop = log.scrollHeight;
+    highlight(s.tool);
+    note.textContent = s.note;
+    idx++;
+    if (idx >= steps.length){ stepBtn.disabled = true; }
+  });
+  resetBtn.addEventListener('click', reset);
+  reset();
+</script>
+</body>
+</html>

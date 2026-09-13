@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chapter 8 · GenAI Application Patterns on AWS</title>
+<style>
+  :root{
+    --ink:#0f1b2d; --ink-soft:#3d4f66; --paper:#f6f8fb; --card:#ffffff;
+    --aws-orange:#ff9900; --aws-orange-dark:#e88b00; --blue:#2074d5; --teal:#0d9488;
+    --purple:#7c3aed; --pink:#db2777; --line:#dde5ef; --radius:16px;
+    --shadow:0 4px 18px rgba(15,27,45,.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    background:var(--paper);color:var(--ink);line-height:1.65}
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;background:#eef2f7;
+    border-radius:5px;padding:1px 6px}
+
+  #progress{position:fixed;top:0;left:0;height:4px;width:0;background:var(--aws-orange);z-index:99}
+
+  .topnav{position:sticky;top:0;z-index:50;background:rgba(15,27,45,.92);backdrop-filter:blur(8px);
+    display:flex;align-items:center;gap:18px;padding:12px 24px;color:#c7d5e5;font-size:.85rem}
+  .topnav a{color:#c7d5e5}
+  .topnav a:hover{color:#fff;text-decoration:none}
+  .topnav .crumb{color:#ffb84d;font-weight:700}
+  .topnav .next{margin-left:auto;color:#7f97b0}
+
+  /* ============ HERO ============ */
+  .hero{position:relative;overflow:hidden;color:#fff;
+    background:linear-gradient(135deg,#0f1b2d 0%,#16324f 55%,#1c4d6b 100%);
+    padding:64px 24px 88px;text-align:center}
+  .hero .kicker{display:inline-block;background:rgba(255,153,0,.15);border:1px solid rgba(255,153,0,.5);
+    color:#ffb84d;border-radius:999px;padding:6px 18px;font-size:.8rem;letter-spacing:.14em;
+    text-transform:uppercase;font-weight:700;margin-bottom:20px}
+  .hero h1{font-size:clamp(1.9rem,4.5vw,3rem);font-weight:800;max-width:860px;margin:0 auto 16px}
+  .hero h1 em{font-style:normal;color:var(--aws-orange)}
+  .hero p{max-width:700px;margin:0 auto;color:#c7d5e5;font-size:1.05rem}
+  .mesh{position:absolute;inset:0;pointer-events:none;opacity:.45}
+  .mesh circle{fill:var(--aws-orange);animation:pulse 3s ease-in-out infinite}
+  .mesh circle:nth-of-type(2n){fill:#4dd0e1;animation-delay:.8s}
+  .mesh line{stroke:#5b7793;stroke-width:1;opacity:.35}
+  .mesh .flow{fill:none;stroke:var(--aws-orange);stroke-width:2;stroke-linecap:round;
+    stroke-dasharray:6 120;animation:dashflow 4s linear infinite;opacity:.9}
+  @keyframes pulse{0%,100%{opacity:.35;r:3}50%{opacity:1;r:5}}
+  @keyframes dashflow{to{stroke-dashoffset:-126}}
+
+  /* ============ LAYOUT ============ */
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  section{padding:60px 0 20px}
+  .section-tag{display:inline-block;font-size:.75rem;font-weight:800;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--aws-orange-dark);margin-bottom:8px}
+  h2{font-size:1.7rem;font-weight:800;margin-bottom:12px}
+  h3{font-size:1.1rem;font-weight:800}
+  .lede{color:var(--ink-soft);max-width:780px;margin-bottom:28px;font-size:1.02rem}
+  .anim-caption{text-align:center;color:var(--ink-soft);font-size:.9rem;margin:6px 0 22px}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:26px;margin-bottom:22px;
+    opacity:0;transform:translateY(20px);transition:opacity .5s ease,transform .5s ease}
+  .panel.visible{opacity:1;transform:none}
+
+  .callout{border-left:6px solid var(--aws-orange);background:#fff8ec;border-radius:12px;
+    padding:16px 20px;margin:20px 0;font-size:.94rem;color:#6b4b0e}
+  .callout b{color:#8a5b00}
+  .callout.blue{border-color:var(--blue);background:#eef5fd;color:#1d4c7c}
+  .callout.blue b{color:#164a80}
+
+  /* ============ REFERENCE ARCH ============ */
+  .ref-svg{width:100%;height:auto;display:block;margin:0 auto}
+  .ref-svg .box{fill:#fff;stroke:var(--line);stroke-width:1.5;rx:12;filter:drop-shadow(0 3px 8px rgba(15,27,45,.10))}
+  .ref-svg .label{font-size:11.5px;font-weight:700;fill:var(--ink)}
+  .ref-svg .sub{font-size:9px;fill:var(--ink-soft)}
+  .ref-svg .wire{stroke:#9fb2c8;stroke-width:1.8;stroke-dasharray:5 6}
+  .ref-svg .dot{fill:var(--blue);animation:refgo 5s linear infinite}
+  .ref-svg .dot.back{fill:var(--teal);animation:refback 5s linear infinite}
+  @keyframes refgo{
+    0%{offset-distance:0;opacity:0}5%{opacity:1}
+    48%{offset-distance:100%;opacity:1}52%{opacity:0}100%{opacity:0}
+  }
+  @keyframes refback{
+    0%,52%{offset-distance:0;opacity:0}56%{opacity:1}
+    96%{offset-distance:100%;opacity:1}100%{opacity:0}
+  }
+  .ref-svg .sidewire{stroke:#c9b3f5;stroke-width:1.8;stroke-dasharray:4 5}
+  .ref-svg .obs{stroke:#f0c987}
+
+  /* ============ PATTERN EXPLORER ============ */
+  .ptabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+  .ptab{border:1px solid var(--line);background:var(--paper);border-radius:999px;
+    padding:8px 18px;font-size:.84rem;font-weight:700;cursor:pointer;color:var(--ink-soft);
+    transition:all .2s ease}
+  .ptab:hover{border-color:#b9c8dc}
+  .ptab.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .pstage{background:#101d31;border-radius:14px;padding:22px 18px 12px}
+  .pstage svg{width:100%;height:auto;display:block}
+  .pstage .nbox{fill:rgba(255,255,255,.06);stroke:rgba(255,255,255,.28);stroke-width:1.4;rx:10}
+  .pstage .nlabel{font-size:11.5px;font-weight:700;fill:#e6eef7}
+  .pstage .nsub{font-size:9px;fill:#7f97b0}
+  .pstage .pwire{stroke:#46617f;stroke-width:1.8;stroke-dasharray:5 6}
+  .pstage .pd{fill:#4dd0e1;animation:pgo var(--dur,4s) linear infinite}
+  .pstage .pd.r{fill:#7ee0c2}
+  @keyframes pgo{
+    0%{offset-distance:0;opacity:0}6%{opacity:1}
+    92%{offset-distance:100%;opacity:1}100%{offset-distance:100%;opacity:0}
+  }
+  .pmeta{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-top:16px}
+  .pmeta .pm{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:12px 15px;font-size:.84rem}
+  .pmeta .pm b{display:block;font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;
+    color:var(--aws-orange-dark);margin-bottom:3px}
+  .pmeta .pm span{color:var(--ink-soft)}
+  .pdesc{font-size:.93rem;color:var(--ink-soft);margin-top:14px}
+  .pdesc b{color:var(--ink)}
+
+  /* ============ CHOOSER QUIZ ============ */
+  .quiz{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+  @media (max-width:760px){.quiz{grid-template-columns:1fr}}
+  .qgroup{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .qgroup h4{font-size:.88rem;margin-bottom:10px}
+  .qopt{display:block;width:100%;text-align:left;border:1px solid var(--line);background:var(--card);
+    border-radius:10px;padding:9px 13px;font-size:.83rem;cursor:pointer;margin-bottom:8px;
+    transition:all .2s ease;color:var(--ink-soft)}
+  .qopt:hover{border-color:#b9c8dc}
+  .qopt.sel{background:#fff5e5;border-color:var(--aws-orange);color:var(--ink);font-weight:600}
+  .qresult{margin-top:18px;border-radius:14px;padding:18px 22px;background:#101d31;color:#d7e3f0;
+    font-size:.92rem;display:flex;gap:14px;align-items:flex-start}
+  .qresult .qi{font-size:1.6rem}
+  .qresult b{color:#ffb84d}
+  .qresult .why{display:block;color:#9fb2c8;font-size:.83rem;margin-top:4px}
+
+  /* ============ CARDS ============ */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:20px;box-shadow:var(--shadow);position:relative;overflow:hidden;
+    opacity:0;transform:translateY(20px)}
+  .card.visible{opacity:1;transform:none;transition:opacity .5s ease,transform .5s ease,box-shadow .25s ease}
+  .card.visible:hover{transform:translateY(-5px);box-shadow:0 12px 28px rgba(15,27,45,.14)}
+  .card::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;
+    background:linear-gradient(90deg,var(--accent,#ff9900),transparent 80%)}
+  .card h4{font-size:1.02rem;margin-bottom:6px}
+  .card p{font-size:.9rem;color:var(--ink-soft)}
+  .card .use{margin-top:12px;font-size:.8rem;background:var(--paper);border-radius:10px;padding:9px 12px;
+    border:1px dashed var(--line);color:var(--ink-soft)}
+  .card .use b{color:var(--ink)}
+  .m-blue{--accent:var(--blue)} .m-purple{--accent:var(--purple)} .m-teal{--accent:var(--teal)}
+  .m-pink{--accent:var(--pink)} .m-amber{--accent:#b45309}
+
+  /* ============ CODE ============ */
+  .codeblock{background:#101d31;border-radius:14px;padding:20px 22px;overflow-x:auto;margin:14px 0}
+  .codeblock pre{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.82rem;line-height:1.6;color:#d7e3f0}
+  .codeblock .c{color:#7f97b0}.codeblock .k{color:#ffb84d}.codeblock .s{color:#7ee0c2}
+
+  /* ============ ANTIPATTERNS ============ */
+  .anti{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--line);border-radius:14px;
+    overflow:hidden;font-size:.88rem}
+  @media (max-width:700px){.anti{grid-template-columns:1fr}}
+  .anti > div{padding:14px 18px;border-bottom:1px solid var(--line)}
+  .anti .bad{background:#fdf1f1;color:#7c2d2d}
+  .anti .good{background:#f0f9f4;color:#1c5c3c}
+  .anti .bad::before{content:"✗ ";font-weight:800;color:#b91c1c}
+  .anti .good::before{content:"✓ ";font-weight:800;color:#15803d}
+  .anti > div:nth-last-child(-n+2){border-bottom:none}
+
+  /* ============ LAB / RECAP ============ */
+  .lab{background:linear-gradient(135deg,#0d3b34,#0d9488);color:#fff;border-radius:20px;padding:30px;margin:26px 0}
+  .lab h3{font-size:1.25rem;margin-bottom:10px}
+  .lab p{color:#cdeee8;font-size:.95rem;margin-bottom:8px}
+  .lab a{color:#aef3e2;font-weight:700}
+  .recap{background:#0f1b2d;color:#fff;border-radius:20px;padding:34px;margin:48px 0 16px}
+  .recap h3{font-size:1.3rem;margin-bottom:14px}
+  .recap ol{margin-left:22px;color:#c7d5e5}
+  .recap li{margin-bottom:8px}
+  .recap b{color:#ffb84d}
+  .nav-btns{display:flex;justify-content:space-between;gap:14px;margin-top:22px;flex-wrap:wrap}
+  .next-btn{display:inline-block;background:var(--aws-orange);color:#0f1b2d;font-weight:800;
+    padding:12px 28px;border-radius:999px;transition:transform .2s ease}
+  .next-btn:hover{transform:translateY(-2px);text-decoration:none}
+  .next-btn.ghost{background:transparent;color:#c7d5e5;border:1px solid #46617f}
+  footer{padding:28px 24px 48px;text-align:center;color:var(--ink-soft);font-size:.85rem}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<nav class="topnav">
+  <a href="index.html">⌂ Course home</a>
+  <span>›</span>
+  <span class="crumb">Chapter 8 · GenAI Application Patterns</span>
+  <span class="next"><a href="chapter-07-amazon-q.html">← Ch. 7</a> · <a href="chapter-09-security-privacy-governance.html">Ch. 9 →</a></span>
+</nav>
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <svg class="mesh" viewBox="0 0 1200 420" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <line x1="120" y1="80" x2="320" y2="180"/><line x1="320" y1="180" x2="560" y2="90"/>
+    <line x1="560" y1="90" x2="820" y2="200"/><line x1="820" y1="200" x2="1080" y2="100"/>
+    <line x1="200" y1="330" x2="460" y2="260"/><line x1="460" y1="260" x2="740" y2="340"/>
+    <path class="flow" d="M120 80 L320 180 L560 90 L820 200 L1080 100"/>
+    <path class="flow" style="animation-delay:2s" d="M200 330 L460 260 L740 340"/>
+    <circle cx="120" cy="80" r="4"/><circle cx="320" cy="180" r="4"/><circle cx="560" cy="90" r="4"/>
+    <circle cx="820" cy="200" r="4"/><circle cx="1080" cy="100" r="4"/><circle cx="460" cy="260" r="4"/>
+  </svg>
+  <div style="position:relative">
+    <span class="kicker">AWS Generative AI · Chapter 8</span>
+    <h1>GenAI Application <em>Patterns on AWS</em></h1>
+    <p>Good news: a GenAI app is ~90% ordinary AWS architecture. This chapter gives you the reference
+       architecture, the six integration patterns that cover almost every use case, and the resilience
+       playbook for the other 10%.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ================= 8.1 REFERENCE ARCH ================= -->
+<section id="refarch">
+  <span class="section-tag">8.1 · The big picture</span>
+  <h2>The reference architecture you'll keep reusing</h2>
+  <p class="lede">Strip away the AI mystique and a production GenAI app looks like every serverless app you've
+  seen — with Bedrock as one more downstream dependency, plus three AI-specific attachments: a knowledge base,
+  a guardrail, and conversation state.</p>
+
+  <div class="panel">
+    <svg class="ref-svg" viewBox="0 0 920 350" role="img" aria-label="Animated reference architecture: client through API Gateway and Lambda to Bedrock, with Knowledge Base, Guardrails, DynamoDB and CloudWatch attached">
+      <!-- main row -->
+      <rect class="box" x="16" y="90" width="120" height="64"/>
+      <text class="label" x="76" y="117" text-anchor="middle">Client</text>
+      <text class="sub" x="76" y="134" text-anchor="middle">web · mobile · internal</text>
+
+      <rect class="box" x="176" y="90" width="130" height="64"/>
+      <text class="label" x="241" y="112" text-anchor="middle">API Gateway</text>
+      <text class="sub" x="241" y="128" text-anchor="middle">auth (Cognito) · throttle</text>
+      <text class="sub" x="241" y="141" text-anchor="middle">request validation</text>
+
+      <rect class="box" x="346" y="90" width="130" height="64"/>
+      <text class="label" x="411" y="112" text-anchor="middle">Lambda</text>
+      <text class="sub" x="411" y="128" text-anchor="middle">prompt assembly</text>
+      <text class="sub" x="411" y="141" text-anchor="middle">retries · validation</text>
+
+      <rect class="box" x="516" y="82" width="150" height="80" stroke="#ff9900" stroke-width="2"/>
+      <text class="label" x="591" y="110" text-anchor="middle">Amazon Bedrock</text>
+      <text class="sub" x="591" y="127" text-anchor="middle">Converse API</text>
+      <text class="sub" x="591" y="141" text-anchor="middle">+ Guardrail attached</text>
+
+      <!-- attachments -->
+      <rect class="box" x="700" y="20" width="146" height="56"/>
+      <text class="label" x="773" y="43" text-anchor="middle">Knowledge Base</text>
+      <text class="sub" x="773" y="60" text-anchor="middle">RAG (Ch. 4)</text>
+
+      <rect class="box" x="700" y="106" width="146" height="56"/>
+      <text class="label" x="773" y="129" text-anchor="middle">Guardrail</text>
+      <text class="sub" x="773" y="146" text-anchor="middle">policy layer (Ch. 6)</text>
+
+      <rect class="box" x="346" y="212" width="130" height="58"/>
+      <text class="label" x="411" y="235" text-anchor="middle">DynamoDB</text>
+      <text class="sub" x="411" y="252" text-anchor="middle">conversation history</text>
+
+      <rect class="box" x="516" y="212" width="150" height="58"/>
+      <text class="label" x="591" y="235" text-anchor="middle">CloudWatch + X-Ray</text>
+      <text class="sub" x="591" y="252" text-anchor="middle">logs · tokens · traces</text>
+
+      <!-- wires -->
+      <line class="wire" x1="140" y1="122" x2="172" y2="122"/>
+      <line class="wire" x1="310" y1="122" x2="342" y2="122"/>
+      <line class="wire" x1="480" y1="122" x2="512" y2="122"/>
+      <line class="sidewire" x1="670" y1="100" x2="696" y2="56"/>
+      <line class="sidewire" x1="670" y1="134" x2="696" y2="134"/>
+      <line class="sidewire" x1="411" y1="158" x2="411" y2="208"/>
+      <line class="wire obs" x1="591" y1="166" x2="591" y2="208"/>
+
+      <!-- animated dots -->
+      <circle class="dot" r="6" style="offset-path:path('M140 122 L512 122')"/>
+      <circle class="dot" r="6" style="offset-path:path('M140 122 L512 122');animation-delay:1.7s"/>
+      <circle class="dot back" r="6" style="offset-path:path('M512 122 L140 122')"/>
+
+      <text class="sub" x="76" y="180" text-anchor="middle" fill="#2074d5">blue = request</text>
+      <text class="sub" x="76" y="196" text-anchor="middle" fill="#0d9488">teal = response</text>
+    </svg>
+    <p class="anim-caption">Familiar bones: authentication, throttling, and validation live exactly where they
+    always did. Only the orange box is new — and you already know it from Chapter 2.</p>
+  </div>
+
+  <div class="callout"><b>Migration lens:</b> this is the same 3-tier shape as the on-prem app you just moved —
+  load balancer → app server → backend — with the "backend" being a reasoning engine instead of (or alongside)
+  a database. Your instincts about timeouts, pooling, and bulkheads all transfer.</div>
+</section>
+
+<!-- ================= 8.2 PATTERN EXPLORER ================= -->
+<section id="patterns">
+  <span class="section-tag">8.2 · The pattern catalog</span>
+  <h2>Six patterns cover almost everything</h2>
+  <p class="lede">The core question for any GenAI feature: <strong>is a human waiting, and for how long?</strong>
+  Click through the patterns — each animates the actual data flow:</p>
+
+  <div class="panel">
+    <div class="ptabs" id="ptabs"></div>
+    <div class="pstage"><svg id="pSvg" viewBox="0 0 860 200"></svg></div>
+    <p class="pdesc" id="pDesc"></p>
+    <div class="pmeta">
+      <div class="pm"><b>Human waiting?</b><span id="pmWait"></span></div>
+      <div class="pm"><b>Key services</b><span id="pmSvc"></span></div>
+      <div class="pm"><b>Classic use case</b><span id="pmUse"></span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 8.3 CHOOSER ================= -->
+<section id="chooser">
+  <span class="section-tag">8.3 · Decide in ten seconds</span>
+  <h2>Interactive: which pattern do I need?</h2>
+  <p class="lede">Answer three questions about your workload; the recommendation updates live.</p>
+
+  <div class="panel">
+    <div class="quiz">
+      <div class="qgroup">
+        <h4>1 · Is a person actively waiting for the result?</h4>
+        <button class="qopt sel" data-g="wait" data-v="chat">Yes — it's a conversation</button>
+        <button class="qopt" data-g="wait" data-v="short">Yes — a single quick result</button>
+        <button class="qopt" data-g="wait" data-v="no">No — background work</button>
+      </div>
+      <div class="qgroup">
+        <h4>2 · How does the work arrive?</h4>
+        <button class="qopt sel" data-g="arrive" data-v="request">A user request (API call)</button>
+        <button class="qopt" data-g="arrive" data-v="event">An event (file lands, record changes)</button>
+        <button class="qopt" data-g="arrive" data-v="bulk">A big pile, on a schedule</button>
+      </div>
+      <div class="qgroup">
+        <h4>3 · How many steps of logic?</h4>
+        <button class="qopt sel" data-g="steps" data-v="one">One model call</button>
+        <button class="qopt" data-g="steps" data-v="multi">A fixed multi-step process</button>
+        <button class="qopt" data-g="steps" data-v="agent">Open-ended — steps unknown upfront</button>
+      </div>
+    </div>
+    <div class="qresult" id="qResult"></div>
+  </div>
+</section>
+
+<!-- ================= 8.4 STATE ================= -->
+<section id="state">
+  <span class="section-tag">8.4 · State &amp; memory</span>
+  <h2>Models are stateless. Your app isn't.</h2>
+  <p class="lede">From Chapter 2: the model forgets everything between calls. "Memory" is an application feature
+  you build — and it's plain data engineering:</p>
+  <div class="grid">
+    <div class="card m-blue">
+      <h4>🗂️ Conversation history</h4>
+      <p>Store messages in DynamoDB keyed by <code>session_id</code>; replay the recent window (or a running summary)
+      into each Converse call. TTL attribute = automatic retention policy.</p>
+      <div class="use"><b>Watch out:</b> resending the full history every turn is your #1 hidden token cost.</div>
+    </div>
+    <div class="card m-teal">
+      <h4>⚡ Response caching</h4>
+      <p>Identical FAQ-style questions shouldn't hit the model twice. Hash the normalized prompt → check
+      ElastiCache → serve in milliseconds for ~zero cost.</p>
+      <div class="use"><b>Level up:</b> semantic caching (match by embedding similarity) — Chapter 10.</div>
+    </div>
+    <div class="card m-purple">
+      <h4>🧠 Long-term memory</h4>
+      <p>User preferences and facts extracted across sessions ("prefers Terraform examples"). Store per-user;
+      inject as context. AgentCore Memory manages this for agents.</p>
+      <div class="use"><b>Governance:</b> this is PII — retention and access rules apply (Ch. 6/9).</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 8.5 RESILIENCE ================= -->
+<section id="resilience">
+  <span class="section-tag">8.5 · When it breaks</span>
+  <h2>The resilience playbook for a probabilistic dependency</h2>
+  <p class="lede">Bedrock brings two twists to your standard playbook: <strong>throttling is normal</strong>
+  (token throughput is quota-bound) and <strong>bad responses aren't exceptions</strong> (the call succeeds;
+  the content is wrong). Handle both:</p>
+
+  <div class="codeblock"><pre><span class="c"># The four layers of a resilient model call</span>
+<span class="k">def</span> robust_invoke(msgs, attempt=0):
+    <span class="k">try</span>:
+        resp = bedrock.converse(modelId=PRIMARY, messages=msgs,
+                                guardrailConfig=GR, inferenceConfig=CFG)
+        out = parse_and_validate(resp)          <span class="c"># 1. schema-validate the CONTENT</span>
+        <span class="k">return</span> out
+    <span class="k">except</span> ThrottlingException:
+        <span class="k">if</span> attempt &lt; 3:
+            sleep(2 ** attempt + jitter())       <span class="c"># 2. backoff+jitter — throttling is normal</span>
+            <span class="k">return</span> robust_invoke(msgs, attempt + 1)
+        <span class="k">return</span> converse_with(FALLBACK, msgs)     <span class="c"># 3. fallback model / cross-region profile</span>
+    <span class="k">except</span> ValidationFailure:
+        <span class="k">return</span> retry_with_repair_prompt(msgs)    <span class="c"># 4. "your last output was invalid JSON…"</span></pre></div>
+
+  <div class="grid">
+    <div class="card m-amber">
+      <h4>⏱️ Timeouts that fit LLMs</h4>
+      <p>A long completion can take 30–90s. Set client timeouts accordingly, stream when a human waits,
+      and go async (SQS) past ~30s.</p>
+    </div>
+    <div class="card m-pink">
+      <h4>🔀 Fallback chains</h4>
+      <p>Primary model → cross-region inference profile → smaller fallback model → cached/static response.
+      Degrade gracefully, never to a spinner.</p>
+    </div>
+    <div class="card m-blue">
+      <h4>🚦 Quota awareness</h4>
+      <p>Bedrock quotas are per model/region in tokens-per-minute. Track usage in CloudWatch, alarm at 70%,
+      and request increases <em>before</em> launch day.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 8.6 IAC ================= -->
+<section id="iac">
+  <span class="section-tag">8.6 · Ship it properly</span>
+  <h2>Everything is infrastructure — including the AI parts</h2>
+  <p class="lede">Guardrails, knowledge bases, prompts, agents: all first-class resources in CloudFormation and
+  CDK. If it's clicked together in the console, it can't be code-reviewed, promoted through environments, or
+  rolled back.</p>
+
+  <div class="codeblock"><pre><span class="c"># CDK: the AI resources deploy like any other (TypeScript)</span>
+<span class="k">const</span> guardrail = <span class="k">new</span> bedrock.CfnGuardrail(<span class="k">this</span>, <span class="s">"CorpGuardrail"</span>, {
+  name: <span class="s">"corp-assistant"</span>,
+  contentPolicyConfig: { filtersConfig: [{ type: <span class="s">"VIOLENCE"</span>, inputStrength: <span class="s">"MEDIUM"</span>,
+                                           outputStrength: <span class="s">"MEDIUM"</span> }] },
+});
+
+<span class="k">const</span> chatFn = <span class="k">new</span> lambda.Function(<span class="k">this</span>, <span class="s">"ChatFn"</span>, { <span class="c">/* … */</span> });
+chatFn.addToRolePolicy(<span class="k">new</span> iam.PolicyStatement({
+  actions: [<span class="s">"bedrock:InvokeModel"</span>, <span class="s">"bedrock:InvokeModelWithResponseStream"</span>],
+  resources: [novaLiteArn],                    <span class="c">// least privilege: ONE model, not "*"</span>
+}));</pre></div>
+
+  <div class="callout blue"><b>Pipeline shape:</b> same CI/CD you built for the migrated apps — plus two GenAI
+  stages: run the <b>golden prompt test set</b> (Chapter 3) against the new build, and smoke-test guardrails with
+  known-bad inputs (Chapter 6). Promotion to prod is blocked on both, exactly like unit tests.</div>
+</section>
+
+<!-- ================= 8.7 ANTIPATTERNS ================= -->
+<section id="antipatterns">
+  <span class="section-tag">8.7 · Field guide</span>
+  <h2>Architecture failures → quick fixes</h2>
+  <div class="panel" style="padding:0;overflow:hidden">
+    <div class="anti">
+      <div class="bad">Synchronous API Gateway call for a 2-minute document analysis</div>
+      <div class="good">SQS + worker + status endpoint (or WebSocket push) — respect the 29s gateway timeout</div>
+      <div class="bad">Calling Bedrock straight from the browser with embedded credentials</div>
+      <div class="good">Always through your backend: auth, guardrails, logging, and cost control live there</div>
+      <div class="bad">One Lambda doing retrieval + prompting + validation + notification</div>
+      <div class="good">Step Functions with small single-purpose steps — retryable, observable, testable</div>
+      <div class="bad">Ignoring streaming because "the API works without it"</div>
+      <div class="good">Stream any human-facing response &gt;2s — perceived latency is the UX</div>
+      <div class="bad">Batch-processing 100k documents through the on-demand API in a loop</div>
+      <div class="good">Bedrock batch inference: ~half the cost, no throttling fight</div>
+      <div class="bad">Hardcoded model IDs scattered through the codebase</div>
+      <div class="good">Model ID + parameters in AppConfig/SSM — swap models without a deploy (Ch. 2)</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= LAB ================= -->
+<section id="lab">
+  <div class="lab">
+    <h3>🧪 Hands-on lab (~90 min)</h3>
+    <p>1. Build the reference architecture: API Gateway → Lambda → Bedrock Converse, with conversation history
+    in DynamoDB and your Chapter 6 guardrail attached. (CDK or console — but try CDK.)</p>
+    <p>2. Add the async pattern: an S3 upload triggers a Lambda that summarizes the document and writes the
+    result back — your first event-driven enrichment.</p>
+    <p>3. Break it on purpose: set a 3s Lambda timeout and watch the failure mode; then fix it with streaming
+    or the queue pattern.</p>
+    <p>4. Reference implementations: <a href="https://github.com/aws-samples/amazon-bedrock-workshop" target="_blank" rel="noopener">Bedrock workshop notebooks</a> ·
+    <a href="https://serverlessland.com/patterns?services=bedrock" target="_blank" rel="noopener">Serverless Land Bedrock patterns</a> ·
+    <a href="https://docs.aws.amazon.com/wellarchitected/latest/generative-ai-lens/generative-ai-lens.html" target="_blank" rel="noopener">Well-Architected GenAI Lens</a>.</p>
+  </div>
+</section>
+
+<!-- ================= RECAP ================= -->
+<section id="recap">
+  <div class="recap">
+    <h3>🎯 Chapter 8 takeaways</h3>
+    <ol>
+      <li>A GenAI app is <b>90% ordinary AWS architecture</b> — Bedrock is one more downstream dependency with a knowledge base, guardrail, and state attached.</li>
+      <li>Pick patterns by asking: <b>is a human waiting, and for how long?</b> Sync → streaming → async → batch, plus event-driven and Step Functions orchestration.</li>
+      <li><b>Memory is your job</b>: DynamoDB history (mind the token cost), caching for repeat questions, per-user long-term memory with PII governance.</li>
+      <li>Two resilience twists: <b>throttling is normal</b> (backoff + fallback chains + quota alarms) and <b>bad content isn't an exception</b> (validate every response, retry with repair prompts).</li>
+      <li>AI resources are <b>infrastructure as code</b> — guardrails, KBs, prompts in CDK, with golden-prompt tests gating promotion.</li>
+      <li>Never call Bedrock from the client; stream anything a human watches; batch anything they don't.</li>
+    </ol>
+    <div class="nav-btns">
+      <a class="next-btn ghost" href="chapter-07-amazon-q.html">← Chapter 7: Amazon Q</a>
+      <a class="next-btn" href="chapter-09-security-privacy-governance.html">Next → Chapter 9: Security, Privacy &amp; Governance</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  AWS GenAI for IT Professionals · Chapter 8 of 12 · Patterns and quotas evolve — verify in the
+  <a href="https://docs.aws.amazon.com/bedrock/" target="_blank" rel="noopener">Bedrock documentation</a> and the
+  <a href="https://docs.aws.amazon.com/wellarchitected/latest/generative-ai-lens/generative-ai-lens.html" target="_blank" rel="noopener">Well-Architected GenAI Lens</a>.
+</footer>
+
+<script>
+  // Scroll progress
+  const bar = document.getElementById('progress');
+  addEventListener('scroll', () => {
+    const h = document.documentElement;
+    bar.style.width = (h.scrollTop / (h.scrollHeight - h.clientHeight) * 100) + '%';
+  }, {passive:true});
+
+  // Reveal on scroll
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); } });
+  }, {threshold:.12});
+  document.querySelectorAll('.panel, .card').forEach((el, i) => {
+    el.style.transitionDelay = (i % 5) * 60 + 'ms';
+    io.observe(el);
+  });
+
+  // ---------- Pattern explorer ----------
+  const NS = 'http://www.w3.org/2000/svg';
+  function nodes(list){
+    return list.map(n =>
+      `<rect class="nbox" x="${n.x}" y="${n.y}" width="${n.w||130}" height="${n.h||58}" rx="10"/>
+       <text class="nlabel" x="${n.x+(n.w||130)/2}" y="${n.y+25}" text-anchor="middle">${n.t}</text>
+       <text class="nsub" x="${n.x+(n.w||130)/2}" y="${n.y+41}" text-anchor="middle">${n.s||''}</text>`).join('');
+  }
+  function wires(list){
+    return list.map(w => `<line class="pwire" x1="${w[0]}" y1="${w[1]}" x2="${w[2]}" y2="${w[3]}"/>`).join('');
+  }
+  function dots(list){
+    return list.map(d =>
+      `<circle class="pd ${d.r?'r':''}" r="6" style="offset-path:path('${d.p}');--dur:${d.dur||4}s;animation-delay:${d.delay||0}s"/>`).join('');
+  }
+  const patterns = [
+    {name:'1 · Sync request', wait:'Yes — up to a few seconds', svc:'API Gateway · Lambda · Converse',
+     use:'Classify a ticket, extract fields, short answers',
+     desc:'<b>The default.</b> One request, one model call, one response. Keep completions short (maxTokens!) and it fits inside API Gateway\'s 29-second window.',
+     svg: nodes([{x:30,y:70,t:'Client'},{x:250,y:70,t:'API GW + Lambda'},{x:480,y:70,t:'Bedrock',s:'Converse'},{x:700,y:70,t:'Response',s:'< 5s'}])
+        + wires([[160,99,246,99],[380,99,476,99],[610,99,696,99]])
+        + dots([{p:'M160 99 L476 99'},{p:'M610 99 L696 99',r:1,delay:2}])},
+    {name:'2 · Streaming chat', wait:'Yes — sees tokens immediately', svc:'Lambda response streaming / AppSync / WebSocket',
+     use:'Chat UIs, assistants, anything conversational',
+     desc:'<b>Perceived latency is the product.</b> ConverseStream sends tokens as they generate; the user reads while the model writes. Use Lambda response streaming, WebSockets, or AppSync subscriptions to carry it to the browser.',
+     svg: nodes([{x:30,y:70,t:'Browser',s:'renders as it arrives'},{x:250,y:70,t:'Streaming channel',s:'Lambda URL / WebSocket'},{x:480,y:70,t:'Bedrock',s:'ConverseStream'}])
+        + wires([[160,99,246,99],[380,99,476,99]])
+        + dots([{p:'M480 99 L160 99',r:1,dur:2.4},{p:'M480 99 L160 99',r:1,dur:2.4,delay:.5},{p:'M480 99 L160 99',r:1,dur:2.4,delay:1},{p:'M480 99 L160 99',r:1,dur:2.4,delay:1.5}])},
+    {name:'3 · Async queue', wait:'No — gets notified later', svc:'SQS · Lambda workers · DynamoDB status',
+     use:'“Analyze this 200-page contract” — minutes of work',
+     desc:'<b>Past ~30 seconds, go async.</b> Accept the job, return a job ID instantly, process from SQS at your own pace (and within quota), then notify — email, push, or a status endpoint the UI polls.',
+     svg: nodes([{x:30,y:70,t:'Client',s:'gets job ID instantly'},{x:230,y:70,t:'SQS queue',s:'buffers + retries'},{x:430,y:70,t:'Worker Lambda',s:'paced to quota'},{x:630,y:70,t:'Bedrock + result',s:'→ DynamoDB → notify'}])
+        + wires([[160,99,226,99],[360,99,426,99],[560,99,626,99]])
+        + dots([{p:'M160 99 L226 99',dur:2.5},{p:'M360 99 L426 99',dur:2.5,delay:1},{p:'M560 99 L626 99',dur:2.5,delay:2,r:1}])},
+    {name:'4 · Event-driven', wait:'No — nobody asked, it just happens', svc:'S3 events · EventBridge · Lambda',
+     use:'Summarize every uploaded doc; classify every new ticket',
+     desc:'<b>AI as a reflex.</b> Something happens (file lands in S3, record changes, ticket created) and enrichment runs automatically. The pattern that quietly upgrades every workload you migrate.',
+     svg: nodes([{x:30,y:70,t:'S3 / app event',s:'doc uploaded'},{x:250,y:70,t:'EventBridge',s:'routes by rule'},{x:470,y:70,t:'Enrich Lambda',s:'summarize · tag · classify'},{x:690,y:70,t:'Result stored',s:'metadata · index'}])
+        + wires([[160,99,246,99],[380,99,466,99],[600,99,686,99]])
+        + dots([{p:'M160 99 L686 99',dur:5},{p:'M160 99 L686 99',dur:5,delay:2.2}])},
+    {name:'5 · Batch inference', wait:'No — results tomorrow is fine', svc:'S3 in · Bedrock Batch · S3 out',
+     use:'Nightly: summarize all tickets, translate the KB, score leads',
+     desc:'<b>~50% cheaper (Chapter 2).</b> Write thousands of prompts to a JSONL file in S3, submit one batch job, collect the outputs. No throttling battles, no Lambda fleet.',
+     svg: nodes([{x:30,y:70,t:'prompts.jsonl',s:'in S3, thousands of rows'},{x:280,y:70,t:'Bedrock batch job',s:'runs on AWS\'s schedule',w:180},{x:590,y:70,t:'results.jsonl',s:'≈ half the on-demand price',w:180}])
+        + wires([[160,99,276,99],[460,99,586,99]])
+        + dots([{p:'M160 99 L276 99',dur:3},{p:'M460 99 L586 99',dur:3,delay:1.5,r:1}])},
+    {name:'6 · Orchestrated', wait:'Depends — it\'s a process', svc:'Step Functions · Lambda · Bedrock',
+     use:'Claims processing: extract → validate → decide → route',
+     desc:'<b>Deterministic backbone, AI decision points</b> (Chapter 5\'s advice). Step Functions owns sequencing, retries, and audit history; Bedrock is called at the steps that need judgment. When steps can\'t be known upfront, that\'s an agent instead.',
+     svg: nodes([{x:30,y:70,t:'Step Functions',s:'state machine'},{x:240,y:20,t:'Extract',s:'Bedrock',w:110,h:48},{x:240,y:120,t:'Validate',s:'Lambda rules',w:110,h:48},{x:420,y:70,t:'Decide',s:'Bedrock + threshold',w:120},{x:610,y:70,t:'Route / human',s:'approve if low confidence',w:150}])
+        + wires([[160,90,236,44],[160,108,236,144],[350,44,416,90],[350,144,416,108],[540,99,606,99]])
+        + dots([{p:'M160 90 L236 44',dur:2},{p:'M350 44 L416 90',dur:2,delay:1},{p:'M540 99 L606 99',dur:2,delay:2,r:1}])}
+  ];
+  const ptabs = document.getElementById('ptabs'), pSvg = document.getElementById('pSvg'),
+        pDesc = document.getElementById('pDesc');
+  patterns.forEach((p, i) => {
+    const b = document.createElement('button');
+    b.className = 'ptab' + (i === 0 ? ' active' : '');
+    b.textContent = p.name;
+    b.addEventListener('click', () => setPattern(i));
+    ptabs.appendChild(b);
+  });
+  function setPattern(i){
+    const p = patterns[i];
+    pSvg.innerHTML = p.svg;
+    pDesc.innerHTML = p.desc;
+    document.getElementById('pmWait').textContent = p.wait;
+    document.getElementById('pmSvc').textContent = p.svc;
+    document.getElementById('pmUse').textContent = p.use;
+    [...ptabs.children].forEach((b, k) => b.classList.toggle('active', k === i));
+  }
+  setPattern(0);
+
+  // ---------- Chooser quiz ----------
+  const sel = {wait:'chat', arrive:'request', steps:'one'};
+  function recommend(){
+    const {wait, arrive, steps} = sel;
+    let icon, name, why;
+    if (steps === 'agent'){
+      icon='🤖'; name='An agent (Chapter 5) — Strands / Bedrock Agents';
+      why='Open-ended steps mean a reasoning loop, not a fixed pipeline. Wrap it in the async pattern if nobody is actively waiting.';
+    } else if (arrive === 'bulk'){
+      icon='📦'; name='Pattern 5 · Batch inference';
+      why='Scheduled piles of work belong in a batch job: ~50% cheaper and no throttling to manage.';
+    } else if (arrive === 'event'){
+      icon='⚡'; name='Pattern 4 · Event-driven enrichment';
+      why='Work triggered by events (not users) should run as a reflex — S3/EventBridge → Lambda → Bedrock.';
+    } else if (wait === 'no'){
+      icon='📮'; name='Pattern 3 · Async queue';
+      why='Nobody is watching a spinner — accept the job, return an ID, process from SQS at quota-friendly pace.';
+    } else if (steps === 'multi'){
+      icon='🪜'; name='Pattern 6 · Step Functions orchestration';
+      why='A known multi-step process wants a state machine for sequencing, retries, and audit — with Bedrock at the judgment steps.';
+    } else if (wait === 'chat'){
+      icon='💬'; name='Pattern 2 · Streaming chat';
+      why='A conversation with a human demands streamed tokens — perceived latency is the product.';
+    } else {
+      icon='🎯'; name='Pattern 1 · Synchronous request';
+      why='One quick result for a waiting user: API Gateway → Lambda → Converse, with tight maxTokens.';
+    }
+    document.getElementById('qResult').innerHTML =
+      `<span class="qi">${icon}</span><div><b>${name}</b><span class="why">${why}</span></div>`;
+  }
+  document.querySelectorAll('.qopt').forEach(b => {
+    b.addEventListener('click', () => {
+      sel[b.dataset.g] = b.dataset.v;
+      document.querySelectorAll(`.qopt[data-g="${b.dataset.g}"]`).forEach(x =>
+        x.classList.toggle('sel', x === b));
+      recommend();
+    });
+  });
+  recommend();
+</script>
+</body>
+</html>

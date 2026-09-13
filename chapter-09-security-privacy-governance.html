@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chapter 9 · Security, Privacy &amp; Governance for GenAI</title>
+<style>
+  :root{
+    --ink:#0f1b2d; --ink-soft:#3d4f66; --paper:#f6f8fb; --card:#ffffff;
+    --aws-orange:#ff9900; --aws-orange-dark:#e88b00; --blue:#2074d5; --teal:#0d9488;
+    --purple:#7c3aed; --pink:#db2777; --line:#dde5ef; --radius:16px;
+    --shadow:0 4px 18px rgba(15,27,45,.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    background:var(--paper);color:var(--ink);line-height:1.65}
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;background:#eef2f7;
+    border-radius:5px;padding:1px 6px}
+
+  #progress{position:fixed;top:0;left:0;height:4px;width:0;background:var(--aws-orange);z-index:99}
+
+  .topnav{position:sticky;top:0;z-index:50;background:rgba(15,27,45,.92);backdrop-filter:blur(8px);
+    display:flex;align-items:center;gap:18px;padding:12px 24px;color:#c7d5e5;font-size:.85rem}
+  .topnav a{color:#c7d5e5}
+  .topnav a:hover{color:#fff;text-decoration:none}
+  .topnav .crumb{color:#ffb84d;font-weight:700}
+  .topnav .next{margin-left:auto;color:#7f97b0}
+
+  /* ============ HERO ============ */
+  .hero{position:relative;overflow:hidden;color:#fff;
+    background:linear-gradient(135deg,#0f1b2d 0%,#16324f 55%,#1c4d6b 100%);
+    padding:64px 24px 88px;text-align:center}
+  .hero .kicker{display:inline-block;background:rgba(255,153,0,.15);border:1px solid rgba(255,153,0,.5);
+    color:#ffb84d;border-radius:999px;padding:6px 18px;font-size:.8rem;letter-spacing:.14em;
+    text-transform:uppercase;font-weight:700;margin-bottom:20px}
+  .hero h1{font-size:clamp(1.9rem,4.5vw,3rem);font-weight:800;max-width:860px;margin:0 auto 16px}
+  .hero h1 em{font-style:normal;color:var(--aws-orange)}
+  .hero p{max-width:700px;margin:0 auto;color:#c7d5e5;font-size:1.05rem}
+  .mesh{position:absolute;inset:0;pointer-events:none;opacity:.45}
+  .mesh circle{fill:var(--aws-orange);animation:pulse 3s ease-in-out infinite}
+  .mesh circle:nth-of-type(2n){fill:#4dd0e1;animation-delay:.8s}
+  .mesh line{stroke:#5b7793;stroke-width:1;opacity:.35}
+  .mesh .flow{fill:none;stroke:var(--aws-orange);stroke-width:2;stroke-linecap:round;
+    stroke-dasharray:6 120;animation:dashflow 4s linear infinite;opacity:.9}
+  @keyframes pulse{0%,100%{opacity:.35;r:3}50%{opacity:1;r:5}}
+  @keyframes dashflow{to{stroke-dashoffset:-126}}
+
+  /* ============ LAYOUT ============ */
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  section{padding:60px 0 20px}
+  .section-tag{display:inline-block;font-size:.75rem;font-weight:800;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--aws-orange-dark);margin-bottom:8px}
+  h2{font-size:1.7rem;font-weight:800;margin-bottom:12px}
+  h3{font-size:1.1rem;font-weight:800}
+  .lede{color:var(--ink-soft);max-width:780px;margin-bottom:28px;font-size:1.02rem}
+  .anim-caption{text-align:center;color:var(--ink-soft);font-size:.9rem;margin:6px 0 22px}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:26px;margin-bottom:22px;
+    opacity:0;transform:translateY(20px);transition:opacity .5s ease,transform .5s ease}
+  .panel.visible{opacity:1;transform:none}
+
+  .callout{border-left:6px solid var(--aws-orange);background:#fff8ec;border-radius:12px;
+    padding:16px 20px;margin:20px 0;font-size:.94rem;color:#6b4b0e}
+  .callout b{color:#8a5b00}
+  .callout.blue{border-color:var(--blue);background:#eef5fd;color:#1d4c7c}
+  .callout.blue b{color:#164a80}
+  .callout.red{border-color:#dc2626;background:#fdf1f1;color:#7c2d2d}
+  .callout.red b{color:#b91c1c}
+
+  /* ============ SHARED RESPONSIBILITY ============ */
+  .resp{display:flex;flex-direction:column;gap:10px}
+  .rlayer{display:flex;align-items:center;gap:16px;border-radius:14px;padding:15px 20px;cursor:pointer;
+    border:2px solid transparent;transition:all .25s ease;font-size:.92rem}
+  .rlayer.aws{background:#e8f4f2;border-color:#bfe3dc}
+  .rlayer.you{background:#fff4e0;border-color:#ffe3ad}
+  .rlayer:hover{transform:translateX(6px)}
+  .rlayer.open{border-color:var(--teal)}
+  .rlayer.you.open{border-color:var(--aws-orange)}
+  .rlayer .owner{flex:0 0 92px;text-align:center;font-size:.7rem;font-weight:800;letter-spacing:.07em;
+    text-transform:uppercase;border-radius:999px;padding:5px 0}
+  .rlayer.aws .owner{background:#0d9488;color:#fff}
+  .rlayer.you .owner{background:var(--aws-orange);color:#0f1b2d}
+  .rlayer b{display:block}
+  .rlayer .detail{display:none;color:var(--ink-soft);font-size:.85rem;margin-top:5px}
+  .rlayer.open .detail{display:block}
+  .rlayer .hint{margin-left:auto;color:var(--ink-soft);font-size:.75rem;flex:0 0 auto}
+
+  /* ============ IAM CODE ============ */
+  .codeblock{background:#101d31;border-radius:14px;padding:20px 22px;overflow-x:auto;margin:14px 0}
+  .codeblock pre{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.82rem;line-height:1.6;color:#d7e3f0}
+  .codeblock .c{color:#7f97b0}.codeblock .k{color:#ffb84d}.codeblock .s{color:#7ee0c2}.codeblock .bad{color:#f48fb1}
+
+  /* ============ VPC DIAGRAM ============ */
+  .vpc-svg{width:100%;max-width:840px;height:auto;display:block;margin:0 auto}
+  .vpc-svg .box{fill:#fff;stroke:var(--line);stroke-width:1.5;rx:12;filter:drop-shadow(0 3px 8px rgba(15,27,45,.10))}
+  .vpc-svg .vpcbound{fill:#eef5fd;stroke:#2074d5;stroke-width:2;stroke-dasharray:8 6;rx:18}
+  .vpc-svg .label{font-size:12px;font-weight:700;fill:var(--ink)}
+  .vpc-svg .sub{font-size:9.5px;fill:var(--ink-soft)}
+  .vpc-svg .wire{stroke:#9fb2c8;stroke-width:2;stroke-dasharray:5 6}
+  .vpc-svg .privdot{fill:var(--teal);animation:privgo 4s linear infinite}
+  @keyframes privgo{
+    0%{offset-distance:0;opacity:0}6%{opacity:1}
+    94%{offset-distance:100%;opacity:1}100%{offset-distance:100%;opacity:0}
+  }
+  .vpc-svg .blockdot{fill:#e05252;animation:blockgo 4s linear infinite}
+  @keyframes blockgo{
+    0%,30%{offset-distance:0;opacity:0}36%{opacity:1}
+    58%{offset-distance:55%;opacity:1}66%{offset-distance:55%;opacity:0}100%{opacity:0}
+  }
+  .vpc-svg .nogo{animation:nogoflash 4s linear infinite}
+  @keyframes nogoflash{0%,55%{opacity:.25}60%,72%{opacity:1}80%,100%{opacity:.25}}
+
+  /* ============ LOG MATCHER ============ */
+  .logmatch{display:grid;grid-template-columns:.95fr 1.05fr;gap:24px}
+  @media (max-width:840px){.logmatch{grid-template-columns:1fr}}
+  .lqbtns{display:flex;flex-direction:column;gap:10px}
+  .lqbtn{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:12px 16px;
+    text-align:left;font-size:.87rem;cursor:pointer;transition:all .2s ease}
+  .lqbtn:hover{border-color:#b9c8dc}
+  .lqbtn.active{background:#fff5e5;border-color:var(--aws-orange)}
+  .logsources{display:flex;flex-direction:column;gap:10px}
+  .lsrc{border:1px solid var(--line);background:var(--paper);border-radius:12px;padding:13px 16px;
+    font-size:.85rem;transition:all .3s ease;opacity:.6}
+  .lsrc b{display:block;font-size:.88rem}
+  .lsrc span{color:var(--ink-soft);font-size:.79rem}
+  .lsrc .why{display:none;margin-top:7px;font-size:.8rem;color:#15803d;font-weight:600}
+  .lsrc.hit{opacity:1;border-color:#7fd4ae;background:#f0f9f4;box-shadow:0 0 0 3px rgba(63,178,127,.15)}
+  .lsrc.hit .why{display:block}
+
+  /* ============ CARDS ============ */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:20px;box-shadow:var(--shadow);position:relative;overflow:hidden;
+    opacity:0;transform:translateY(20px)}
+  .card.visible{opacity:1;transform:none;transition:opacity .5s ease,transform .5s ease,box-shadow .25s ease}
+  .card.visible:hover{transform:translateY(-5px);box-shadow:0 12px 28px rgba(15,27,45,.14)}
+  .card::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;
+    background:linear-gradient(90deg,var(--accent,#ff9900),transparent 80%)}
+  .card h4{font-size:1.02rem;margin-bottom:6px}
+  .card p{font-size:.9rem;color:var(--ink-soft)}
+  .card .use{margin-top:12px;font-size:.8rem;background:var(--paper);border-radius:10px;padding:9px 12px;
+    border:1px dashed var(--line);color:var(--ink-soft)}
+  .card .use b{color:var(--ink)}
+  .m-blue{--accent:var(--blue)} .m-purple{--accent:var(--purple)} .m-teal{--accent:var(--teal)}
+  .m-pink{--accent:var(--pink)} .m-amber{--accent:#b45309}
+
+  /* ============ CHECKLIST ============ */
+  .checklist{list-style:none;counter-reset:chk}
+  .checklist li{display:flex;gap:14px;align-items:flex-start;background:var(--card);
+    border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin-bottom:10px;
+    box-shadow:var(--shadow);font-size:.92rem}
+  .checklist li::before{counter-increment:chk;content:counter(chk);flex:0 0 30px;height:30px;
+    border-radius:50%;background:var(--ink);color:#fff;display:flex;align-items:center;
+    justify-content:center;font-weight:800;font-size:.85rem}
+  .checklist b{color:var(--ink)}
+  .checklist span{color:var(--ink-soft)}
+
+  /* ============ ANTIPATTERNS ============ */
+  .anti{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--line);border-radius:14px;
+    overflow:hidden;font-size:.88rem}
+  @media (max-width:700px){.anti{grid-template-columns:1fr}}
+  .anti > div{padding:14px 18px;border-bottom:1px solid var(--line)}
+  .anti .bad{background:#fdf1f1;color:#7c2d2d}
+  .anti .good{background:#f0f9f4;color:#1c5c3c}
+  .anti .bad::before{content:"✗ ";font-weight:800;color:#b91c1c}
+  .anti .good::before{content:"✓ ";font-weight:800;color:#15803d}
+  .anti > div:nth-last-child(-n+2){border-bottom:none}
+
+  /* ============ LAB / RECAP ============ */
+  .lab{background:linear-gradient(135deg,#0d3b34,#0d9488);color:#fff;border-radius:20px;padding:30px;margin:26px 0}
+  .lab h3{font-size:1.25rem;margin-bottom:10px}
+  .lab p{color:#cdeee8;font-size:.95rem;margin-bottom:8px}
+  .lab a{color:#aef3e2;font-weight:700}
+  .recap{background:#0f1b2d;color:#fff;border-radius:20px;padding:34px;margin:48px 0 16px}
+  .recap h3{font-size:1.3rem;margin-bottom:14px}
+  .recap ol{margin-left:22px;color:#c7d5e5}
+  .recap li{margin-bottom:8px}
+  .recap b{color:#ffb84d}
+  .nav-btns{display:flex;justify-content:space-between;gap:14px;margin-top:22px;flex-wrap:wrap}
+  .next-btn{display:inline-block;background:var(--aws-orange);color:#0f1b2d;font-weight:800;
+    padding:12px 28px;border-radius:999px;transition:transform .2s ease}
+  .next-btn:hover{transform:translateY(-2px);text-decoration:none}
+  .next-btn.ghost{background:transparent;color:#c7d5e5;border:1px solid #46617f}
+  footer{padding:28px 24px 48px;text-align:center;color:var(--ink-soft);font-size:.85rem}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<nav class="topnav">
+  <a href="index.html">⌂ Course home</a>
+  <span>›</span>
+  <span class="crumb">Chapter 9 · Security, Privacy &amp; Governance</span>
+  <span class="next"><a href="chapter-08-genai-app-patterns.html">← Ch. 8</a> · <a href="chapter-10-cost-performance.html">Ch. 10 →</a></span>
+</nav>
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <svg class="mesh" viewBox="0 0 1200 420" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <line x1="120" y1="80" x2="320" y2="180"/><line x1="320" y1="180" x2="560" y2="90"/>
+    <line x1="560" y1="90" x2="820" y2="200"/><line x1="820" y1="200" x2="1080" y2="100"/>
+    <line x1="200" y1="330" x2="460" y2="260"/><line x1="460" y1="260" x2="740" y2="340"/>
+    <path class="flow" d="M120 80 L320 180 L560 90 L820 200 L1080 100"/>
+    <path class="flow" style="animation-delay:2s" d="M200 330 L460 260 L740 340"/>
+    <circle cx="120" cy="80" r="4"/><circle cx="320" cy="180" r="4"/><circle cx="560" cy="90" r="4"/>
+    <circle cx="820" cy="200" r="4"/><circle cx="1080" cy="100" r="4"/><circle cx="460" cy="260" r="4"/>
+  </svg>
+  <div style="position:relative">
+    <span class="kicker">AWS Generative AI · Chapter 9</span>
+    <h1>Security, Privacy &amp; Governance: <em>the Platform View</em></h1>
+    <p>Chapter 6 secured the <strong>conversation</strong>; this chapter secures the <strong>platform</strong> —
+       identities, networks, keys, logs, and the org-wide rules that let you scale from one AI app to fifty
+       without losing control.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ================= 9.1 SHARED RESPONSIBILITY ================= -->
+<section id="responsibility">
+  <span class="section-tag">9.1 · Who secures what</span>
+  <h2>The shared responsibility model, GenAI edition</h2>
+  <p class="lede">You know this model from your migration — it applies to AI with new layers.
+  <strong>Click each layer</strong> to see the specifics. The pattern is familiar: AWS secures the service
+  <em>of</em> the model; you secure everything that flows <em>through</em> it.</p>
+
+  <div class="panel resp">
+    <div class="rlayer you"><span class="owner">You</span>
+      <div><b>Your application &amp; prompts</b>
+        <div class="detail">Prompt content, injected context, output handling and validation, what your tools/agents
+        are allowed to do, guardrail policies and their tuning (Ch. 6), golden-test coverage.</div></div>
+      <span class="hint">click ↓</span></div>
+    <div class="rlayer you"><span class="owner">You</span>
+      <div><b>Your data</b>
+        <div class="detail">What goes into prompts and knowledge bases, S3 bucket policies, KMS key policies,
+        PII classification (Macie), retention (S3 Lifecycle, DynamoDB TTL), data residency choices.</div></div>
+      <span class="hint">click ↓</span></div>
+    <div class="rlayer you"><span class="owner">You</span>
+      <div><b>Identity &amp; access</b>
+        <div class="detail">IAM roles and policies for humans and workloads, model-scoped permissions,
+        SCPs restricting which models/regions the org may use, Cognito/Identity Center federation.</div></div>
+      <span class="hint">click ↓</span></div>
+    <div class="rlayer you"><span class="owner">You</span>
+      <div><b>Network configuration</b>
+        <div class="detail">VPC endpoints for Bedrock, security groups, egress control for agent tools,
+        private connectivity back to on-prem systems still in migration.</div></div>
+      <span class="hint">click ↓</span></div>
+    <div class="rlayer aws"><span class="owner">AWS</span>
+      <div><b>The Bedrock service</b>
+        <div class="detail">Model hosting and isolation, tenant separation, the promise that your prompts and
+        outputs are NOT used to train models or shared with model providers, service-side encryption.</div></div>
+      <span class="hint">click ↓</span></div>
+    <div class="rlayer aws"><span class="owner">AWS</span>
+      <div><b>Infrastructure &amp; compliance</b>
+        <div class="detail">Physical data centers, hardware, hypervisors, and the certifications you inherit —
+        SOC, ISO 27001, HIPAA eligibility, and more (verify per-service in AWS Artifact).</div></div>
+      <span class="hint">click ↓</span></div>
+  </div>
+
+  <div class="callout"><b>The answer to "is Bedrock safe for our data?"</b> — the service is; the question is
+  whether <em>your configuration</em> is. That's the same answer as S3 was during your migration, and this
+  chapter is the configuration checklist.</div>
+</section>
+
+<!-- ================= 9.2 IAM ================= -->
+<section id="iam">
+  <span class="section-tag">9.2 · Identity is the perimeter</span>
+  <h2>IAM for AI: scope by model, gate by team</h2>
+  <p class="lede">Every Bedrock call is an authenticated, authorized AWS API call — which means your entire IAM
+  toolbox applies. Three levels matter:</p>
+
+  <div class="codeblock"><pre><span class="c"># Level 1 — Workload policy: THIS app may invoke ONE model (and nothing else)</span>
+{ <span class="s">"Effect"</span>: <span class="s">"Allow"</span>,
+  <span class="s">"Action"</span>: [<span class="s">"bedrock:InvokeModel"</span>, <span class="s">"bedrock:InvokeModelWithResponseStream"</span>],
+  <span class="s">"Resource"</span>: <span class="s">"arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-lite-v1:0"</span> }
+<span class="c">#              never </span><span class="bad">"Resource": "*"</span><span class="c"> — that grants every model, including the expensive ones</span>
+
+<span class="c"># Level 2 — Guardrail enforcement: deny invocations that DON'T carry the guardrail</span>
+{ <span class="s">"Effect"</span>: <span class="s">"Deny"</span>,
+  <span class="s">"Action"</span>: <span class="s">"bedrock:InvokeModel"</span>, <span class="s">"Resource"</span>: <span class="s">"*"</span>,
+  <span class="s">"Condition"</span>: { <span class="s">"StringNotEquals"</span>: {
+      <span class="s">"bedrock:GuardrailIdentifier"</span>: <span class="s">"arn:aws:bedrock:us-east-1:111122223333:guardrail/gr-corp"</span> }}}
+
+<span class="c"># Level 3 — Organizations SCP: the whole org may only use approved regions</span>
+{ <span class="s">"Effect"</span>: <span class="s">"Deny"</span>, <span class="s">"Action"</span>: <span class="s">"bedrock:*"</span>, <span class="s">"Resource"</span>: <span class="s">"*"</span>,
+  <span class="s">"Condition"</span>: { <span class="s">"StringNotEquals"</span>: { <span class="s">"aws:RequestedRegion"</span>: [<span class="s">"us-east-1"</span>, <span class="s">"eu-central-1"</span>] }}}</pre></div>
+
+  <div class="callout blue"><b>Level 2 is the underrated one:</b> an IAM condition that makes guardrails
+  <em>mandatory</em>, not optional. No developer can "temporarily" ship without the policy layer —
+  the platform enforces it, like a mandatory proxy in your old data center.</div>
+</section>
+
+<!-- ================= 9.3 NETWORK ================= -->
+<section id="network">
+  <span class="section-tag">9.3 · Private by default</span>
+  <h2>VPC endpoints: prompts that never touch the internet</h2>
+  <p class="lede">By default, Bedrock's API endpoint is public (TLS-protected, but public). For regulated
+  workloads — or just strict egress rules carried over from on-prem — use <strong>AWS PrivateLink</strong>:
+  an interface VPC endpoint keeps every prompt and response on the AWS network.</p>
+
+  <div class="panel">
+    <svg class="vpc-svg" viewBox="0 0 840 300" role="img" aria-label="Animated diagram: traffic from a private subnet reaches Bedrock through a VPC endpoint while the internet path is blocked">
+      <rect class="vpcbound" x="16" y="30" width="420" height="240"/>
+      <text class="label" x="40" y="56" fill="#2074d5">Your VPC (no internet gateway)</text>
+
+      <rect class="box" x="46" y="90" width="150" height="64"/>
+      <text class="label" x="121" y="117" text-anchor="middle">App / Lambda</text>
+      <text class="sub" x="121" y="134" text-anchor="middle">private subnet</text>
+
+      <rect class="box" x="250" y="90" width="150" height="64" stroke="#0d9488" stroke-width="2"/>
+      <text class="label" x="325" y="112" text-anchor="middle">VPC endpoint</text>
+      <text class="sub" x="325" y="128" text-anchor="middle">PrivateLink ENI</text>
+      <text class="sub" x="325" y="142" text-anchor="middle">+ endpoint policy</text>
+
+      <rect class="box" x="580" y="82" width="200" height="80" stroke="#ff9900" stroke-width="2"/>
+      <text class="label" x="680" y="112" text-anchor="middle">Amazon Bedrock</text>
+      <text class="sub" x="680" y="130" text-anchor="middle">traffic stays on the</text>
+      <text class="sub" x="680" y="144" text-anchor="middle">AWS network backbone</text>
+
+      <!-- internet path (blocked) -->
+      <rect class="box" x="580" y="210" width="200" height="56" stroke="#e05252"/>
+      <text class="label" x="680" y="233" text-anchor="middle" fill="#b91c1c">Public internet</text>
+      <text class="sub" x="680" y="250" text-anchor="middle">route doesn't exist</text>
+
+      <line class="wire" x1="200" y1="122" x2="246" y2="122"/>
+      <line class="wire" x1="404" y1="122" x2="576" y2="122"/>
+      <line class="wire" x1="180" y1="158" x2="576" y2="238" stroke="#e05252"/>
+
+      <circle class="privdot" r="6" style="offset-path:path('M200 122 L576 122')"/>
+      <circle class="privdot" r="6" style="offset-path:path('M200 122 L576 122');animation-delay:1.6s"/>
+      <circle class="blockdot" r="6" style="offset-path:path('M180 158 L576 238')"/>
+      <g class="nogo">
+        <circle cx="392" cy="200" r="13" fill="none" stroke="#e05252" stroke-width="3"/>
+        <line x1="383" y1="191" x2="401" y2="209" stroke="#e05252" stroke-width="3"/>
+      </g>
+    </svg>
+    <p class="anim-caption">Teal = private path via PrivateLink. Red = the path that no longer exists.
+    The <b>endpoint policy</b> adds another gate: only listed roles may call only listed models through this endpoint.</p>
+  </div>
+
+  <div class="callout"><b>Migration lens:</b> this is your old "no direct internet from the app tier" rule,
+  preserved in the cloud. Combine with security groups and you can prove to auditors that AI traffic never
+  left your controlled network path — same evidence pattern as your database tier.</div>
+</section>
+
+<!-- ================= 9.4 DATA PROTECTION ================= -->
+<section id="data">
+  <span class="section-tag">9.4 · Data protection</span>
+  <h2>Keys, residency, retention: the privacy trio</h2>
+  <div class="grid">
+    <div class="card m-blue">
+      <h4>🔑 Encryption &amp; KMS</h4>
+      <p>In transit: TLS everywhere. At rest: knowledge bases, agent sessions, guardrail configs, and logs all
+      support <b>customer-managed KMS keys</b> — your keys, your revocation power, CloudTrail on every decrypt.</p>
+      <div class="use"><b>Do:</b> CMKs for anything touching regulated data; key policy ≠ IAM policy — set both.</div>
+    </div>
+    <div class="card m-teal">
+      <h4>🌍 Residency &amp; cross-region</h4>
+      <p>Bedrock processes data in the region you call — until you enable <b>cross-region inference</b> (Ch. 2),
+      which routes within a defined <b>geography</b> (US, EU, APAC profiles).</p>
+      <div class="use"><b>Do:</b> for GDPR-scoped data, pick EU profiles and pin regions with the SCP from 9.2.</div>
+    </div>
+    <div class="card m-purple">
+      <h4>🗓️ Retention &amp; minimization</h4>
+      <p>The model keeps nothing between calls — but <em>your</em> DynamoDB history, invocation logs, and vector
+      stores do. That's where privacy regulation actually lands.</p>
+      <div class="use"><b>Do:</b> TTL on conversation tables, lifecycle policies on log buckets, Macie scans on
+      document buckets feeding knowledge bases.</div>
+    </div>
+    <div class="card m-pink">
+      <h4>🧹 The deletion question</h4>
+      <p>"Delete user X's data" (GDPR Art. 17) means: their conversation history, their documents in the KB
+      <em>and its vectors after re-sync</em>, and log entries per your retention policy.</p>
+      <div class="use"><b>Do:</b> design the deletion runbook before launch — retrofitting it is painful.</div>
+    </div>
+  </div>
+
+  <div class="callout red"><b>Repeat the Chapter 2 promise, because auditors ask:</b> Amazon Bedrock does not use
+  your prompts or completions to train models, and does not share them with model providers. Your exposure lives
+  in <em>your own</em> stores — history tables, logs, vector indexes — which is exactly where your existing data
+  governance applies.</div>
+</section>
+
+<!-- ================= 9.5 LOG MATCHER ================= -->
+<section id="audit">
+  <span class="section-tag">9.5 · Audit &amp; observability</span>
+  <h2>Interactive: which log answers which question?</h2>
+  <p class="lede">Three log streams, three different jobs. <strong>Pick an auditor's question</strong> and see
+  which source lights up — knowing this mapping cold is half of every compliance review:</p>
+
+  <div class="panel logmatch">
+    <div class="lqbtns">
+      <button class="lqbtn active" data-q="0">"Who changed the guardrail config last Tuesday?"</button>
+      <button class="lqbtn" data-q="1">"Show me the exact prompt and answer from ticket #4482."</button>
+      <button class="lqbtn" data-q="2">"How many tokens did the claims app burn this week, and is latency degrading?"</button>
+      <button class="lqbtn" data-q="3">"Prove no one invoked a model without a guardrail this quarter."</button>
+      <button class="lqbtn" data-q="4">"An agent did something odd at 02:00 — reconstruct its steps."</button>
+    </div>
+    <div class="logsources">
+      <div class="lsrc" id="ls-trail"><b>🗂️ AWS CloudTrail</b>
+        <span>Every management API call: who, what, when, from where. The control-plane record.</span>
+        <div class="why" id="why-trail"></div></div>
+      <div class="lsrc" id="ls-invoke"><b>📜 Bedrock Model Invocation Logs</b>
+        <span>Opt-in capture of full request/response bodies (prompts, completions, token counts) to S3/CloudWatch.</span>
+        <div class="why" id="why-invoke"></div></div>
+      <div class="lsrc" id="ls-cw"><b>📈 CloudWatch Metrics &amp; X-Ray</b>
+        <span>Invocation counts, token metrics, latency percentiles, error rates, traces across services.</span>
+        <div class="why" id="why-cw"></div></div>
+    </div>
+  </div>
+
+  <div class="callout blue"><b>Turn invocation logging on early</b> — it's opt-in, and the incident you'll want
+  it for won't announce itself in advance. Encrypt the log bucket with a CMK, lifecycle it per policy, and
+  restrict read access: prompt logs are themselves sensitive data.</div>
+</section>
+
+<!-- ================= 9.6 GOVERNANCE ================= -->
+<section id="governance">
+  <span class="section-tag">9.6 · Scaling control</span>
+  <h2>Governance: from one AI app to fifty</h2>
+  <p class="lede">The first GenAI app is a project; the tenth is a platform. Borrow the multi-account discipline
+  from your migration landing zone:</p>
+
+  <ol class="checklist">
+    <li><div><b>Model allow-list via SCP &amp; model access.</b>
+      <span> Approve model families centrally (legal reviews licensing once); deny the rest org-wide. New model
+      requests follow the same path as new SaaS vendors.</span></div></li>
+    <li><div><b>A GenAI gateway account.</b>
+      <span> Central account owning guardrails, invocation logging, and cost allocation; app accounts call through
+      it. One place to audit, one place to tune (the "gateway architecture" from the Bedrock ecosystem).</span></div></li>
+    <li><div><b>AI inventory in your CMDB.</b>
+      <span> Every assistant/agent registered: owner, model, guardrail version, data sources, risk tier.
+      If it's not inventoried, it's shadow AI.</span></div></li>
+    <li><div><b>Risk-tiered review.</b>
+      <span> Internal FAQ bot ≠ customer-facing advisor ≠ agent with write access. Define 3 tiers with
+      proportionate review — don't CAB-review a lunch-menu bot.</span></div></li>
+    <li><div><b>Compliance evidence on tap.</b>
+      <span> AWS Artifact for AWS-side attestations; AWS Config rules for your-side drift (unencrypted buckets,
+      endpoints removed); Audit Manager to assemble the evidence package.</span></div></li>
+    <li><div><b>An AI usage policy people can read.</b>
+      <span> One page: approved tools, banned inputs (customer PII into consumer chatbots), escalation path.
+      The Q Business rollout from Chapter 7 is your carrot — a safe tool beats a banned one.</span></div></li>
+  </ol>
+</section>
+
+<!-- ================= 9.7 ANTIPATTERNS ================= -->
+<section id="antipatterns">
+  <span class="section-tag">9.7 · Field guide</span>
+  <h2>Security failures → quick fixes</h2>
+  <div class="panel" style="padding:0;overflow:hidden">
+    <div class="anti">
+      <div class="bad"><code>bedrock:*</code> on <code>Resource: *</code> because permissions were "blocking the sprint"</div>
+      <div class="good">Model-scoped ARNs per workload; a broad policy is a one-line change away from an expensive surprise</div>
+      <div class="bad">Guardrails optional, relying on developers to remember</div>
+      <div class="good">IAM condition denying un-guardrailed invocations (9.2 Level 2) — enforced, not encouraged</div>
+      <div class="bad">Invocation logging "later" — it's launch week</div>
+      <div class="good">Logging on from day one; you can't investigate what you didn't record</div>
+      <div class="bad">Prompt logs readable by every developer</div>
+      <div class="good">Logs are sensitive data: CMK-encrypted, least-privilege read, lifecycle-expired</div>
+      <div class="bad">Conversation history kept forever "for future fine-tuning"</div>
+      <div class="good">TTL by policy now; a hypothetical future use case doesn't justify indefinite PII retention</div>
+      <div class="bad">Each team wiring its own Bedrock setup, differently</div>
+      <div class="good">Gateway account + landing-zone blueprints — the same fix as your migration's account sprawl</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= LAB ================= -->
+<section id="lab">
+  <div class="lab">
+    <h3>🧪 Hands-on lab (~60 min)</h3>
+    <p>1. Rewrite your Chapter 8 Lambda role to the <strong>model-scoped policy</strong> from 9.2 — verify a call to
+    any other model fails with AccessDenied.</p>
+    <p>2. Add the <strong>guardrail-enforcement deny condition</strong> and confirm an un-guardrailed invoke is rejected.</p>
+    <p>3. Create an <strong>interface VPC endpoint</strong> for <code>bedrock-runtime</code>, run your app in a private
+    subnet, and confirm calls succeed with no internet route.</p>
+    <p>4. Enable <strong>model invocation logging</strong> to a CMK-encrypted bucket; find your own test prompt in
+    the logs, then answer all five questions from section 9.5 using the right source.</p>
+    <p>5. Deeper: <a href="https://docs.aws.amazon.com/bedrock/latest/userguide/security.html" target="_blank" rel="noopener">Bedrock security docs</a> ·
+    <a href="https://docs.aws.amazon.com/bedrock/latest/userguide/usingVPC.html" target="_blank" rel="noopener">Bedrock + PrivateLink</a> ·
+    <a href="https://docs.aws.amazon.com/wellarchitected/latest/generative-ai-lens/generative-ai-lens.html" target="_blank" rel="noopener">GenAI Lens: security pillar</a>.</p>
+  </div>
+</section>
+
+<!-- ================= RECAP ================= -->
+<section id="recap">
+  <div class="recap">
+    <h3>🎯 Chapter 9 takeaways</h3>
+    <ol>
+      <li><b>Shared responsibility, GenAI edition:</b> AWS secures the model service; you secure prompts, data, identities, and networks — same split you learned in migration.</li>
+      <li>IAM in three levels: <b>model-scoped ARNs</b> per workload, a deny condition making <b>guardrails mandatory</b>, and <b>SCPs</b> pinning approved models/regions org-wide.</li>
+      <li><b>PrivateLink endpoints</b> keep prompts off the internet — your old "no direct egress from the app tier" rule, preserved.</li>
+      <li>Privacy lives in <em>your</em> stores: KMS CMKs, region pinning for residency, TTL/lifecycle retention, and a <b>deletion runbook designed before launch</b>.</li>
+      <li>Know the log map cold: <b>CloudTrail</b> = who changed what, <b>invocation logs</b> = what was said, <b>CloudWatch/X-Ray</b> = how it's performing. Turn invocation logging on early.</li>
+      <li>Scale governance like your landing zone: model allow-lists, a gateway account, AI inventory in the CMDB, risk-tiered reviews.</li>
+    </ol>
+    <div class="nav-btns">
+      <a class="next-btn ghost" href="chapter-08-genai-app-patterns.html">← Chapter 8: GenAI Application Patterns</a>
+      <a class="next-btn" href="chapter-10-cost-performance.html">Next → Chapter 10: Cost Optimization &amp; Performance</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  AWS GenAI for IT Professionals · Chapter 9 of 12 · Compliance scopes change — verify current attestations in
+  <a href="https://aws.amazon.com/artifact/" target="_blank" rel="noopener">AWS Artifact</a> and the
+  <a href="https://docs.aws.amazon.com/bedrock/latest/userguide/security.html" target="_blank" rel="noopener">Bedrock security documentation</a>.
+</footer>
+
+<script>
+  // Scroll progress
+  const bar = document.getElementById('progress');
+  addEventListener('scroll', () => {
+    const h = document.documentElement;
+    bar.style.width = (h.scrollTop / (h.scrollHeight - h.clientHeight) * 100) + '%';
+  }, {passive:true});
+
+  // Reveal on scroll
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); } });
+  }, {threshold:.12});
+  document.querySelectorAll('.panel, .card').forEach((el, i) => {
+    el.style.transitionDelay = (i % 5) * 60 + 'ms';
+    io.observe(el);
+  });
+
+  // Shared responsibility accordion
+  document.querySelectorAll('.rlayer').forEach(l =>
+    l.addEventListener('click', () => l.classList.toggle('open')));
+
+  // ---------- Log matcher ----------
+  const lq = [
+    {hits:{trail:'✓ Control-plane change: CloudTrail records the UpdateGuardrail call — identity, timestamp, source IP, and parameters.'}},
+    {hits:{invoke:'✓ Full request/response bodies live only here — and only if you enabled invocation logging before the event.'}},
+    {hits:{cw:'✓ Token counts, invocation counts, and latency percentiles are CloudWatch metrics — dashboard + alarm material.'}},
+    {hits:{trail:'✓ CloudTrail shows every InvokeModel call and whether a guardrail ARN was attached…',
+           cw:'✓ …and a CloudWatch metric filter over those events gives you the continuous compliance signal.'}},
+    {hits:{invoke:'✓ The prompts, tool calls, and responses of each step are in the invocation/trace logs…',
+           cw:'✓ …and X-Ray stitches the steps into one timeline across Lambda, Bedrock, and downstream APIs.'}}
+  ];
+  const srcs = ['trail','invoke','cw'];
+  function setLq(i){
+    const q = lq[i];
+    srcs.forEach(s => {
+      const el = document.getElementById('ls-'+s), why = document.getElementById('why-'+s);
+      const hit = q.hits[s];
+      el.classList.toggle('hit', !!hit);
+      why.textContent = hit || '';
+    });
+    document.querySelectorAll('.lqbtn').forEach(b =>
+      b.classList.toggle('active', +b.dataset.q === i));
+  }
+  document.querySelectorAll('.lqbtn').forEach(b =>
+    b.addEventListener('click', () => setLq(+b.dataset.q)));
+  setLq(0);
+</script>
+</body>
+</html>

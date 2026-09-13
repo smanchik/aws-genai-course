@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chapter 3 · Prompt Engineering that Actually Works</title>
+<style>
+  :root{
+    --ink:#0f1b2d; --ink-soft:#3d4f66; --paper:#f6f8fb; --card:#ffffff;
+    --aws-orange:#ff9900; --aws-orange-dark:#e88b00; --blue:#2074d5; --teal:#0d9488;
+    --purple:#7c3aed; --pink:#db2777; --line:#dde5ef; --radius:16px;
+    --shadow:0 4px 18px rgba(15,27,45,.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    background:var(--paper);color:var(--ink);line-height:1.65}
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;background:#eef2f7;
+    border-radius:5px;padding:1px 6px}
+
+  #progress{position:fixed;top:0;left:0;height:4px;width:0;background:var(--aws-orange);z-index:99}
+
+  .topnav{position:sticky;top:0;z-index:50;background:rgba(15,27,45,.92);backdrop-filter:blur(8px);
+    display:flex;align-items:center;gap:18px;padding:12px 24px;color:#c7d5e5;font-size:.85rem}
+  .topnav a{color:#c7d5e5}
+  .topnav a:hover{color:#fff;text-decoration:none}
+  .topnav .crumb{color:#ffb84d;font-weight:700}
+  .topnav .next{margin-left:auto;color:#7f97b0}
+
+  /* ============ HERO ============ */
+  .hero{position:relative;overflow:hidden;color:#fff;
+    background:linear-gradient(135deg,#0f1b2d 0%,#16324f 55%,#1c4d6b 100%);
+    padding:64px 24px 88px;text-align:center}
+  .hero .kicker{display:inline-block;background:rgba(255,153,0,.15);border:1px solid rgba(255,153,0,.5);
+    color:#ffb84d;border-radius:999px;padding:6px 18px;font-size:.8rem;letter-spacing:.14em;
+    text-transform:uppercase;font-weight:700;margin-bottom:20px}
+  .hero h1{font-size:clamp(1.9rem,4.5vw,3rem);font-weight:800;max-width:840px;margin:0 auto 16px}
+  .hero h1 em{font-style:normal;color:var(--aws-orange)}
+  .hero p{max-width:700px;margin:0 auto;color:#c7d5e5;font-size:1.05rem}
+  .mesh{position:absolute;inset:0;pointer-events:none;opacity:.45}
+  .mesh circle{fill:var(--aws-orange);animation:pulse 3s ease-in-out infinite}
+  .mesh circle:nth-of-type(2n){fill:#4dd0e1;animation-delay:.8s}
+  .mesh line{stroke:#5b7793;stroke-width:1;opacity:.35}
+  .mesh .flow{fill:none;stroke:var(--aws-orange);stroke-width:2;stroke-linecap:round;
+    stroke-dasharray:6 120;animation:dashflow 4s linear infinite;opacity:.9}
+  @keyframes pulse{0%,100%{opacity:.35;r:3}50%{opacity:1;r:5}}
+  @keyframes dashflow{to{stroke-dashoffset:-126}}
+
+  /* ============ LAYOUT ============ */
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  section{padding:60px 0 20px}
+  .section-tag{display:inline-block;font-size:.75rem;font-weight:800;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--aws-orange-dark);margin-bottom:8px}
+  h2{font-size:1.7rem;font-weight:800;margin-bottom:12px}
+  h3{font-size:1.1rem;font-weight:800}
+  .lede{color:var(--ink-soft);max-width:780px;margin-bottom:28px;font-size:1.02rem}
+  .anim-caption{text-align:center;color:var(--ink-soft);font-size:.9rem;margin:6px 0 22px}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:26px;margin-bottom:22px;
+    opacity:0;transform:translateY(20px);transition:opacity .5s ease,transform .5s ease}
+  .panel.visible{opacity:1;transform:none}
+
+  .callout{border-left:6px solid var(--aws-orange);background:#fff8ec;border-radius:12px;
+    padding:16px 20px;margin:20px 0;font-size:.94rem;color:#6b4b0e}
+  .callout b{color:#8a5b00}
+  .callout.blue{border-color:var(--blue);background:#eef5fd;color:#1d4c7c}
+  .callout.blue b{color:#164a80}
+
+  /* ============ ANATOMY (layered prompt) ============ */
+  .anatomy{display:grid;grid-template-columns:1.15fr .85fr;gap:24px;align-items:start}
+  @media (max-width:820px){.anatomy{grid-template-columns:1fr}}
+  .prompt-doc{background:#101d31;border-radius:14px;padding:18px;font-family:"SF Mono",Menlo,monospace;
+    font-size:.8rem;line-height:1.55;color:#d7e3f0}
+  .p-block{border-radius:10px;padding:10px 14px;margin-bottom:10px;border-left:4px solid var(--bcolor,#888);
+    background:rgba(255,255,255,.05);opacity:0;transform:translateX(-14px);
+    transition:opacity .5s ease,transform .5s ease, box-shadow .3s ease;cursor:pointer}
+  .p-block.visible{opacity:1;transform:none}
+  .p-block:hover,.p-block.hl{box-shadow:0 0 0 2px var(--bcolor);background:rgba(255,255,255,.1)}
+  .p-block .tag{display:inline-block;font-size:.64rem;font-weight:800;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--bcolor);margin-bottom:4px}
+  .b-role{--bcolor:#ffb84d}.b-ctx{--bcolor:#4dd0e1}.b-task{--bcolor:#b388ff}
+  .b-ex{--bcolor:#7ee0c2}.b-fmt{--bcolor:#f48fb1}.b-input{--bcolor:#ffd54f}
+  .anatomy-legend{list-style:none}
+  .anatomy-legend li{display:flex;gap:12px;padding:11px 0;border-bottom:1px solid var(--line);
+    font-size:.9rem;align-items:flex-start;cursor:pointer;border-radius:8px;padding-left:8px;
+    transition:background .2s ease}
+  .anatomy-legend li:hover,.anatomy-legend li.hl{background:#eef2f7}
+  .anatomy-legend li:last-child{border-bottom:none}
+  .anatomy-legend .dot{flex:0 0 12px;height:12px;border-radius:4px;margin-top:6px}
+  .anatomy-legend b{display:block}
+  .anatomy-legend span{color:var(--ink-soft);font-size:.85rem}
+
+  /* ============ PROMPT BUILDER (interactive) ============ */
+  .builder{display:grid;grid-template-columns:.9fr 1.1fr;gap:24px}
+  @media (max-width:820px){.builder{grid-template-columns:1fr}}
+  .toggles{display:flex;flex-direction:column;gap:10px}
+  .toggle{display:flex;align-items:center;gap:12px;background:var(--paper);border:1px solid var(--line);
+    border-radius:12px;padding:12px 16px;cursor:pointer;transition:border-color .2s ease, background .2s ease;
+    user-select:none}
+  .toggle:hover{border-color:#b9c8dc}
+  .toggle.on{background:#eef7f1;border-color:#7fd4ae}
+  .toggle .sw{flex:0 0 40px;height:22px;border-radius:999px;background:#c3cfdd;position:relative;transition:background .25s ease}
+  .toggle .sw::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;
+    background:#fff;transition:transform .25s ease}
+  .toggle.on .sw{background:var(--teal)}
+  .toggle.on .sw::after{transform:translateX(18px)}
+  .toggle b{font-size:.9rem}
+  .toggle span{display:block;font-size:.78rem;color:var(--ink-soft)}
+  .quality{margin-top:16px}
+  .quality .qlabel{display:flex;justify-content:space-between;font-size:.82rem;color:var(--ink-soft);margin-bottom:6px}
+  .qbar{height:14px;border-radius:999px;background:#e4eaf2;overflow:hidden}
+  .qfill{height:100%;width:25%;border-radius:999px;background:linear-gradient(90deg,#e05252,#f0a94b,#3fb27f);
+    background-size:340px 100%;transition:width .6s cubic-bezier(.5,1.4,.4,1)}
+  .qverdict{font-size:.85rem;font-weight:700;margin-top:8px;color:var(--ink-soft)}
+  .out-doc{background:#101d31;border-radius:14px;padding:18px;font-family:"SF Mono",Menlo,monospace;
+    font-size:.79rem;line-height:1.6;color:#d7e3f0;min-height:330px;white-space:pre-wrap}
+  .out-doc .dim{color:#7f97b0}
+  .out-doc .add{color:#7ee0c2}
+
+  /* ============ TECHNIQUE CARDS ============ */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:20px;box-shadow:var(--shadow);position:relative;overflow:hidden;
+    opacity:0;transform:translateY(20px)}
+  .card.visible{opacity:1;transform:none;transition:opacity .5s ease,transform .5s ease,box-shadow .25s ease}
+  .card.visible:hover{transform:translateY(-5px);box-shadow:0 12px 28px rgba(15,27,45,.14)}
+  .card::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;
+    background:linear-gradient(90deg,var(--accent,#ff9900),transparent 80%)}
+  .card h4{font-size:1.02rem;margin-bottom:6px}
+  .card p{font-size:.9rem;color:var(--ink-soft)}
+  .card .oneliner{display:block;font-size:.78rem;font-weight:700;color:var(--accent,var(--aws-orange-dark));
+    text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+  .card .use{margin-top:12px;font-size:.8rem;background:var(--paper);border-radius:10px;padding:9px 12px;
+    border:1px dashed var(--line);color:var(--ink-soft)}
+  .card .use b{color:var(--ink)}
+  .m-blue{--accent:var(--blue)} .m-purple{--accent:var(--purple)} .m-teal{--accent:var(--teal)}
+  .m-pink{--accent:var(--pink)} .m-amber{--accent:#b45309}
+
+  /* ============ COT ANIMATION ============ */
+  .cot{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  @media (max-width:760px){.cot{grid-template-columns:1fr}}
+  .cot-col{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .cot-col h4{font-size:.95rem;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .cot-col .verdict{margin-top:12px;font-weight:800;font-size:.9rem}
+  .verdict.bad{color:#b91c1c}.verdict.good{color:#15803d}
+  .step{display:flex;gap:10px;align-items:flex-start;background:#fff;border:1px solid var(--line);
+    border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:.85rem;color:var(--ink-soft);
+    opacity:0;transform:translateY(10px)}
+  .cot.play .step{animation:stepin .5s ease forwards}
+  .cot.play .step:nth-child(2){animation-delay:.5s}.cot.play .step:nth-child(3){animation-delay:1s}
+  .cot.play .step:nth-child(4){animation-delay:1.5s}.cot.play .step:nth-child(5){animation-delay:2s}
+  @keyframes stepin{to{opacity:1;transform:none}}
+  .step .n{flex:0 0 22px;height:22px;border-radius:50%;background:var(--purple);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:800}
+  .replay{display:inline-block;margin-top:12px;background:var(--ink);color:#fff;border:none;
+    border-radius:999px;padding:8px 22px;font-size:.85rem;font-weight:700;cursor:pointer}
+  .replay:hover{background:#22344e}
+
+  /* ============ CODE ============ */
+  .codeblock{background:#101d31;border-radius:14px;padding:20px 22px;overflow-x:auto;margin:14px 0}
+  .codeblock pre{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.82rem;line-height:1.6;color:#d7e3f0}
+  .codeblock .c{color:#7f97b0}.codeblock .k{color:#ffb84d}.codeblock .s{color:#7ee0c2}
+
+  /* ============ LIFECYCLE PIPELINE ============ */
+  .pipeline{display:flex;gap:0;align-items:stretch;justify-content:space-between;flex-wrap:wrap}
+  .stagebox{flex:1 1 150px;text-align:center;padding:18px 10px;position:relative}
+  .stagebox .icon{width:56px;height:56px;margin:0 auto 10px;border-radius:16px;background:var(--card);
+    border:1px solid var(--line);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;
+    font-size:1.5rem;animation:bob 3s ease-in-out infinite}
+  .stagebox:nth-child(2) .icon{animation-delay:.4s}.stagebox:nth-child(3) .icon{animation-delay:.8s}
+  .stagebox:nth-child(4) .icon{animation-delay:1.2s}.stagebox:nth-child(5) .icon{animation-delay:1.6s}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+  .stagebox h4{font-size:.9rem;margin-bottom:4px}
+  .stagebox p{font-size:.78rem;color:var(--ink-soft)}
+  .stagebox::after{content:"→";position:absolute;right:-8px;top:34px;color:#9fb2c8;font-size:1.2rem;font-weight:700}
+  .stagebox:last-child::after{content:""}
+
+  /* ============ ANTIPATTERNS ============ */
+  .anti{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--line);border-radius:14px;
+    overflow:hidden;font-size:.88rem}
+  @media (max-width:700px){.anti{grid-template-columns:1fr}}
+  .anti > div{padding:14px 18px;border-bottom:1px solid var(--line)}
+  .anti .bad{background:#fdf1f1;color:#7c2d2d}
+  .anti .good{background:#f0f9f4;color:#1c5c3c}
+  .anti .bad::before{content:"✗ ";font-weight:800;color:#b91c1c}
+  .anti .good::before{content:"✓ ";font-weight:800;color:#15803d}
+  .anti > div:nth-last-child(-n+2){border-bottom:none}
+
+  /* ============ LAB / RECAP ============ */
+  .lab{background:linear-gradient(135deg,#0d3b34,#0d9488);color:#fff;border-radius:20px;padding:30px;margin:26px 0}
+  .lab h3{font-size:1.25rem;margin-bottom:10px}
+  .lab p{color:#cdeee8;font-size:.95rem;margin-bottom:8px}
+  .lab a{color:#aef3e2;font-weight:700}
+  .recap{background:#0f1b2d;color:#fff;border-radius:20px;padding:34px;margin:48px 0 16px}
+  .recap h3{font-size:1.3rem;margin-bottom:14px}
+  .recap ol{margin-left:22px;color:#c7d5e5}
+  .recap li{margin-bottom:8px}
+  .recap b{color:#ffb84d}
+  .nav-btns{display:flex;justify-content:space-between;gap:14px;margin-top:22px;flex-wrap:wrap}
+  .next-btn{display:inline-block;background:var(--aws-orange);color:#0f1b2d;font-weight:800;
+    padding:12px 28px;border-radius:999px;transition:transform .2s ease}
+  .next-btn:hover{transform:translateY(-2px);text-decoration:none}
+  .next-btn.ghost{background:transparent;color:#c7d5e5;border:1px solid #46617f}
+  footer{padding:28px 24px 48px;text-align:center;color:var(--ink-soft);font-size:.85rem}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<nav class="topnav">
+  <a href="index.html">⌂ Course home</a>
+  <span>›</span>
+  <span class="crumb">Chapter 3 · Prompt Engineering</span>
+  <span class="next"><a href="chapter-02-bedrock-deep-dive.html">← Ch. 2</a> · <a href="chapter-04-rag-knowledge-bases.html">Ch. 4 →</a></span>
+</nav>
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <svg class="mesh" viewBox="0 0 1200 420" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <line x1="120" y1="80" x2="320" y2="180"/><line x1="320" y1="180" x2="560" y2="90"/>
+    <line x1="560" y1="90" x2="820" y2="200"/><line x1="820" y1="200" x2="1080" y2="100"/>
+    <line x1="200" y1="330" x2="460" y2="260"/><line x1="460" y1="260" x2="740" y2="340"/>
+    <path class="flow" d="M120 80 L320 180 L560 90 L820 200 L1080 100"/>
+    <path class="flow" style="animation-delay:2s" d="M200 330 L460 260 L740 340"/>
+    <circle cx="120" cy="80" r="4"/><circle cx="320" cy="180" r="4"/><circle cx="560" cy="90" r="4"/>
+    <circle cx="820" cy="200" r="4"/><circle cx="1080" cy="100" r="4"/><circle cx="460" cy="260" r="4"/>
+  </svg>
+  <div style="position:relative">
+    <span class="kicker">AWS Generative AI · Chapter 3</span>
+    <h1>Prompt Engineering <em>that Actually Works</em></h1>
+    <p>The prompt is your new configuration file. In this chapter you'll learn the anatomy of a
+       production-grade prompt, the five techniques that cover 95% of real work, and how AWS helps you
+       version, test, and govern prompts like any other artifact.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ================= 3.1 MINDSET ================= -->
+<section id="mindset">
+  <span class="section-tag">3.1 · The mindset shift</span>
+  <h2>You're not chatting — you're writing a spec</h2>
+  <p class="lede">In Chapter 2 you saw that models predict tokens based on the input you give them.
+  That makes the prompt the <strong>single highest-leverage engineering surface</strong> in a GenAI app:
+  the same model can be useless or excellent depending entirely on what you send it.
+  Think of a prompt the way you think of a <em>work order for a contractor</em> — a very capable one who
+  takes everything literally and knows nothing about your company unless you tell them.</p>
+
+  <div class="callout"><b>Migration lens:</b> prompts are configuration, not conversation. They belong in
+  source control, they need code review, they need testing, and they will need rollbacks. Everything you know
+  about managing <code>httpd.conf</code> applies — except this config file is written in English.</div>
+</section>
+
+<!-- ================= 3.2 ANATOMY ================= -->
+<section id="anatomy">
+  <span class="section-tag">3.2 · Anatomy of a prompt</span>
+  <h2>The six building blocks</h2>
+  <p class="lede">Production prompts aren't one sentence. They're structured documents with up to six parts.
+  <strong>Hover or tap each block</strong> to see what it does — this example turns a model into a ticket-triage
+  assistant for a migrated helpdesk app.</p>
+
+  <div class="panel anatomy">
+    <div class="prompt-doc" id="promptDoc">
+      <div class="p-block b-role" data-k="role">
+        <span class="tag">1 · Role</span>
+        You are a senior IT support triage specialist for AnyCompany's internal helpdesk.
+      </div>
+      <div class="p-block b-ctx" data-k="ctx">
+        <span class="tag">2 · Context</span>
+        AnyCompany has 4 support tiers. Hardware issues go to Tier 1, access/password to Tier 2,
+        application errors to Tier 3, security incidents to Tier 4 (urgent).
+      </div>
+      <div class="p-block b-task" data-k="task">
+        <span class="tag">3 · Task</span>
+        Classify the ticket below into exactly one tier and write a one-sentence justification.
+      </div>
+      <div class="p-block b-ex" data-k="ex">
+        <span class="tag">4 · Examples</span>
+        Ticket: "Laptop screen flickers" → {"tier": 1, "reason": "Physical hardware fault."}<br>
+        Ticket: "Can't log into VPN" → {"tier": 2, "reason": "Access/credential issue."}
+      </div>
+      <div class="p-block b-fmt" data-k="fmt">
+        <span class="tag">5 · Output format</span>
+        Respond with JSON only: {"tier": &lt;1-4&gt;, "reason": "&lt;one sentence&gt;"}. No other text.
+      </div>
+      <div class="p-block b-input" data-k="input">
+        <span class="tag">6 · Input data</span>
+        Ticket: "Strange outbound traffic from the finance file server since 02:00."
+      </div>
+    </div>
+    <ul class="anatomy-legend">
+      <li data-k="role"><span class="dot" style="background:#ffb84d"></span>
+        <div><b>Role</b><span>Sets persona and domain. Dramatically shapes tone and vocabulary.</span></div></li>
+      <li data-k="ctx"><span class="dot" style="background:#4dd0e1"></span>
+        <div><b>Context</b><span>The business knowledge the model can't know. Your rules, your data.</span></div></li>
+      <li data-k="task"><span class="dot" style="background:#b388ff"></span>
+        <div><b>Task</b><span>One clear instruction. Ambiguity here is the #1 cause of bad outputs.</span></div></li>
+      <li data-k="ex"><span class="dot" style="background:#7ee0c2"></span>
+        <div><b>Examples (few-shot)</b><span>Show, don't tell. 2–5 examples often beat a page of instructions.</span></div></li>
+      <li data-k="fmt"><span class="dot" style="background:#f48fb1"></span>
+        <div><b>Output format</b><span>Make responses machine-parseable — your code consumes this, not a human.</span></div></li>
+      <li data-k="input"><span class="dot" style="background:#ffd54f"></span>
+        <div><b>Input data</b><span>The variable part — injected by your application at runtime.</span></div></li>
+    </ul>
+  </div>
+  <p class="anim-caption">Blocks 1–5 form your <em>template</em> (static, versioned); block 6 is runtime data your app injects.</p>
+</section>
+
+<!-- ================= 3.3 BUILDER ================= -->
+<section id="builder">
+  <span class="section-tag">3.3 · See the difference</span>
+  <h2>Interactive: build the prompt, watch quality climb</h2>
+  <p class="lede">Flip each ingredient on and off. The right panel shows what the model receives and how the
+  response changes — this mirrors exactly what you'd observe in the Bedrock playground.</p>
+
+  <div class="panel builder">
+    <div>
+      <div class="toggles">
+        <label class="toggle" data-k="role"><span class="sw"></span>
+          <div><b>Add a role</b><span>"You are a senior IT triage specialist…"</span></div></label>
+        <label class="toggle" data-k="ctx"><span class="sw"></span>
+          <div><b>Add business context</b><span>The 4-tier routing rules</span></div></label>
+        <label class="toggle" data-k="ex"><span class="sw"></span>
+          <div><b>Add few-shot examples</b><span>Two solved tickets</span></div></label>
+        <label class="toggle" data-k="fmt"><span class="sw"></span>
+          <div><b>Demand structured output</b><span>"JSON only, this schema"</span></div></label>
+      </div>
+      <div class="quality">
+        <div class="qlabel"><span>Response quality</span><span id="qpct">25%</span></div>
+        <div class="qbar"><div class="qfill" id="qfill"></div></div>
+        <p class="qverdict" id="qverdict">Bare prompt: vague, unpredictable, unparseable.</p>
+      </div>
+    </div>
+    <div class="out-doc" id="outDoc"></div>
+  </div>
+</section>
+
+<!-- ================= 3.4 TECHNIQUES ================= -->
+<section id="techniques">
+  <span class="section-tag">3.4 · The technique toolbox</span>
+  <h2>Five techniques cover 95% of production work</h2>
+  <div class="grid">
+    <div class="card m-blue">
+      <h4>🎯 Zero-shot</h4>
+      <span class="oneliner">Just ask</span>
+      <p>A clear instruction with no examples. Modern models handle simple, common tasks this way —
+      summarize, translate, extract.</p>
+      <div class="use"><b>Use when:</b> the task is unambiguous and generic. Cheapest in tokens.</div>
+    </div>
+    <div class="card m-teal">
+      <h4>📋 Few-shot</h4>
+      <span class="oneliner">Show 2–5 examples</span>
+      <p>Demonstrate the pattern with solved examples. The single most reliable quality upgrade —
+      especially for classification and formatting.</p>
+      <div class="use"><b>Use when:</b> output must follow <em>your</em> conventions (codes, tiers, styles).</div>
+    </div>
+    <div class="card m-purple">
+      <h4>🪜 Chain-of-thought</h4>
+      <span class="oneliner">"Think step by step"</span>
+      <p>Ask the model to reason before answering. Trades extra tokens for large accuracy gains on
+      multi-step logic, math, and policy decisions.</p>
+      <div class="use"><b>Use when:</b> the answer requires reasoning, not recall. See it in action below.</div>
+    </div>
+    <div class="card m-pink">
+      <h4>🧱 Structured output</h4>
+      <span class="oneliner">JSON in, JSON out</span>
+      <p>Specify an exact schema and demand nothing else. Turns a chatty model into a dependable API
+      your downstream code can parse.</p>
+      <div class="use"><b>Use when:</b> a program — not a person — consumes the response. (Almost always.)</div>
+    </div>
+    <div class="card m-amber">
+      <h4>🔗 Prompt chaining</h4>
+      <span class="oneliner">Decompose the job</span>
+      <p>Split complex work into sequential prompts: extract → validate → summarize. Each step is simpler,
+      testable, and can use a cheaper model.</p>
+      <div class="use"><b>Use when:</b> one mega-prompt keeps failing. Orchestrate with Step Functions or Prompt Flows.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 3.5 COT DEMO ================= -->
+<section id="cot">
+  <span class="section-tag">3.5 · Chain-of-thought, animated</span>
+  <h2>Why "think step by step" works</h2>
+  <p class="lede">A real policy question from a migration project: <em>"Our file server has 4 TB used, growing
+  1 TB/quarter. The S3 migration window is in 9 months. Will a 10 TB allocation suffice for the first year after
+  migration?"</em></p>
+
+  <div class="panel">
+    <div class="cot" id="cotDemo">
+      <div class="cot-col">
+        <h4>⚡ Direct answer (no reasoning)</h4>
+        <div class="step" style="opacity:1;transform:none"><div class="n" style="background:#b91c1c">!</div>
+          <div>"Yes, 10 TB should be plenty for your file server."</div></div>
+        <p class="verdict bad">Sounds confident. Never did the math. Coin-flip reliability.</p>
+      </div>
+      <div class="cot-col">
+        <h4>🪜 Chain-of-thought</h4>
+        <div class="step"><div class="n">1</div><div>Current usage: 4 TB. Growth: 1 TB/quarter.</div></div>
+        <div class="step"><div class="n">2</div><div>Migration in 9 months = 3 quarters → 4 + 3 = <b>7 TB at cutover</b>.</div></div>
+        <div class="step"><div class="n">3</div><div>First year after migration = 4 more quarters → 7 + 4 = <b>11 TB</b>.</div></div>
+        <div class="step"><div class="n">4</div><div>11 TB &gt; 10 TB allocation.</div></div>
+        <div class="step"><div class="n">✓</div><div><b>No — allocation falls ~1 TB short in month 9 post-migration.</b></div></div>
+        <p class="verdict good">Auditable reasoning you can verify — and catch when it's wrong.</p>
+      </div>
+    </div>
+    <button class="replay" id="cotReplay">↻ Replay reasoning</button>
+  </div>
+
+  <div class="callout blue"><b>Bonus:</b> newer models (Claude, Nova Premier) have built-in "extended thinking"
+  modes that do this internally. You still benefit from requesting visible reasoning when you need an
+  <em>audit trail</em> — e.g., for change-approval decisions.</div>
+</section>
+
+<!-- ================= 3.6 TEMPLATES / CODE ================= -->
+<section id="templates">
+  <span class="section-tag">3.6 · From prompt to template</span>
+  <h2>Parameterize it: prompts as versioned artifacts</h2>
+  <p class="lede">Hard-coding prompt strings inside application code is the GenAI equivalent of hard-coding
+  database passwords. Separate the <strong>template</strong> (owned, reviewed, versioned) from the
+  <strong>variables</strong> (injected at runtime).</p>
+
+  <div class="codeblock"><pre><span class="c"># Bedrock Converse with a system prompt + templated user message</span>
+SYSTEM_PROMPT = <span class="s">"""You are a senior IT support triage specialist for AnyCompany.
+Tiers: 1=hardware, 2=access, 3=application, 4=security (urgent).
+Respond with JSON only: {"tier": &lt;1-4&gt;, "reason": "&lt;one sentence&gt;"}"""</span>
+
+<span class="k">def</span> triage(ticket_text: str):
+    <span class="k">return</span> bedrock.converse(
+        modelId=<span class="s">"amazon.nova-lite-v1:0"</span>,
+        system=[{<span class="s">"text"</span>: SYSTEM_PROMPT}],                <span class="c"># the template</span>
+        messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>,
+                   <span class="s">"content"</span>: [{<span class="s">"text"</span>: f<span class="s">"Ticket: {ticket_text}"</span>}]}],  <span class="c"># the variable</span>
+        inferenceConfig={<span class="s">"maxTokens"</span>: 150, <span class="s">"temperature"</span>: 0.1}
+    )</pre></div>
+
+  <div class="callout"><b>System vs. user messages:</b> the <code>system</code> field carries your standing
+  instructions and gets stronger adherence from the model — users can't easily override it. Put blocks 1–5
+  there; keep only runtime data in the user message. This is also your first line of defense against
+  prompt injection (Chapter 6 goes deeper).</div>
+
+  <h3 style="margin:26px 0 10px">The prompt lifecycle on AWS</h3>
+  <div class="panel">
+    <div class="pipeline">
+      <div class="stagebox"><div class="icon">✏️</div><h4>Draft</h4><p>Bedrock playground: iterate fast, compare models side-by-side</p></div>
+      <div class="stagebox"><div class="icon">🧪</div><h4>Test</h4><p>Golden test set: known inputs → expected outputs, run on every change</p></div>
+      <div class="stagebox"><div class="icon">🏷️</div><h4>Version</h4><p>Bedrock Prompt Management: named versions, variables, review</p></div>
+      <div class="stagebox"><div class="icon">🚀</div><h4>Deploy</h4><p>App references prompt by version — rollback is a pointer change</p></div>
+      <div class="stagebox"><div class="icon">📈</div><h4>Monitor</h4><p>Invocation logs: watch quality, cost, and drift in production</p></div>
+    </div>
+  </div>
+  <p class="anim-caption">Identical shape to your CI/CD pipeline — because a prompt <em>is</em> a deployable artifact.</p>
+</section>
+
+<!-- ================= 3.7 ANTIPATTERNS ================= -->
+<section id="antipatterns">
+  <span class="section-tag">3.7 · Field guide</span>
+  <h2>Common failures → quick fixes</h2>
+  <div class="panel" style="padding:0;overflow:hidden">
+    <div class="anti">
+      <div class="bad">"Make this better" — vague verbs, no success criteria</div>
+      <div class="good">"Rewrite for a non-technical audience in ≤3 sentences, keeping all version numbers"</div>
+      <div class="bad">Telling the model what <em>not</em> to do ("don't be verbose, don't speculate…")</div>
+      <div class="good">State what <em>to</em> do: "Answer in ≤50 words. If unsure, reply exactly: UNKNOWN"</div>
+      <div class="bad">One mega-prompt doing extraction + analysis + formatting + translation</div>
+      <div class="good">Chain small prompts; each step testable, each can use the cheapest adequate model</div>
+      <div class="bad">Assuming the model knows your acronyms, org chart, or current date</div>
+      <div class="good">Inject context explicitly — the model only knows what's in the prompt (or the RAG pipeline, Ch. 4)</div>
+      <div class="bad">Parsing free-text answers with regex and hoping</div>
+      <div class="good">Demand a JSON schema, validate it, and retry on parse failure</div>
+      <div class="bad">Editing prompts live in production code</div>
+      <div class="good">Prompt Management versions + golden tests + staged rollout</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= LAB ================= -->
+<section id="lab">
+  <div class="lab">
+    <h3>🧪 Hands-on lab (~40 min)</h3>
+    <p>1. In the Bedrock <strong>Chat playground</strong>, run the bare ticket-triage ask, then add role → context →
+    examples → JSON format one at a time. Watch the output stabilize, exactly like the interactive demo above.</p>
+    <p>2. Take your best version into <strong>Bedrock Prompt Management</strong>: create a prompt with a
+    <code>{{ticket}}</code> variable, save Version 1, and invoke it from the Converse API.</p>
+    <p>3. Deeper dive: the <a href="https://catalog.workshops.aws/building-with-amazon-bedrock/en-US" target="_blank" rel="noopener">Building with Amazon Bedrock workshop</a> (Prompt Engineering module)
+    and <a href="https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-engineering-guidelines.html" target="_blank" rel="noopener">AWS prompt engineering guidelines</a>.</p>
+  </div>
+</section>
+
+<!-- ================= RECAP ================= -->
+<section id="recap">
+  <div class="recap">
+    <h3>🎯 Chapter 3 takeaways</h3>
+    <ol>
+      <li>A prompt is a <b>spec, not a chat</b> — treat it like configuration: versioned, reviewed, tested, rollback-able.</li>
+      <li>Production prompts have six parts: <b>role, context, task, examples, output format, input data</b>. The first five are your template.</li>
+      <li>Five techniques cover 95% of work: zero-shot, <b>few-shot</b>, chain-of-thought, <b>structured output</b>, and prompt chaining.</li>
+      <li><b>Chain-of-thought</b> buys accuracy and an audit trail on reasoning tasks — for the price of extra tokens.</li>
+      <li>Put standing instructions in the <b>system message</b>; inject runtime data in the user message.</li>
+      <li><b>Bedrock Prompt Management</b> gives prompts a CI/CD-style lifecycle: draft → test → version → deploy → monitor.</li>
+    </ol>
+    <div class="nav-btns">
+      <a class="next-btn ghost" href="chapter-02-bedrock-deep-dive.html">← Chapter 2: Bedrock Deep Dive</a>
+      <a class="next-btn" href="chapter-04-rag-knowledge-bases.html">Next → Chapter 4: RAG &amp; Knowledge Bases</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  AWS GenAI for IT Professionals · Chapter 3 of 12 · Model behavior varies by family — always validate prompts
+  against the <a href="https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-engineering-guidelines.html" target="_blank" rel="noopener">official Bedrock prompt guidance</a>.
+</footer>
+
+<script>
+  // Scroll progress
+  const bar = document.getElementById('progress');
+  addEventListener('scroll', () => {
+    const h = document.documentElement;
+    bar.style.width = (h.scrollTop / (h.scrollHeight - h.clientHeight) * 100) + '%';
+  }, {passive:true});
+
+  // Reveal on scroll
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); } });
+  }, {threshold:.12});
+  document.querySelectorAll('.panel, .card, .p-block').forEach((el, i) => {
+    el.style.transitionDelay = (i % 6) * 70 + 'ms';
+    io.observe(el);
+  });
+
+  // Anatomy hover sync
+  const sync = k => {
+    document.querySelectorAll('[data-k]').forEach(el =>
+      el.classList.toggle('hl', k !== null && el.dataset.k === k));
+  };
+  document.querySelectorAll('.p-block, .anatomy-legend li').forEach(el => {
+    el.addEventListener('mouseenter', () => sync(el.dataset.k));
+    el.addEventListener('mouseleave', () => sync(null));
+  });
+
+  // ---------- Prompt builder ----------
+  const state = {role:false, ctx:false, ex:false, fmt:false};
+  const outDoc = document.getElementById('outDoc');
+  const qfill = document.getElementById('qfill'), qpct = document.getElementById('qpct'),
+        qverdict = document.getElementById('qverdict');
+
+  const pieces = {
+    base: 'PROMPT:\n  Classify this ticket:\n  "Strange outbound traffic from the\n  finance file server since 02:00."',
+    role: '\n  + You are a senior IT triage specialist.',
+    ctx:  '\n  + Tiers: 1=hardware 2=access 3=app 4=security(urgent)',
+    ex:   '\n  + Example: "Laptop flickers" → {"tier":1,...}\n  + Example: "VPN login fails" → {"tier":2,...}',
+    fmt:  '\n  + Respond with JSON only: {"tier","reason"}'
+  };
+  const outputs = [
+    {min:0, pct:25, verdict:'Bare prompt: vague, unpredictable, unparseable.',
+     out:'RESPONSE:\n  "This ticket seems to describe some kind\n  of network issue. It could be several\n  things. You may want to investigate\n  the traffic further..."'},
+    {min:1, pct:45, verdict:'Better tone and vocabulary — still no reliable structure.',
+     out:'RESPONSE:\n  "As a triage specialist, I\'d flag this as\n  potentially serious - possibly security\n  related. Recommend escalating."'},
+    {min:2, pct:65, verdict:'Correct routing appears — format still drifts run to run.',
+     out:'RESPONSE:\n  "This maps to Tier 4 (security incident):\n  unusual outbound traffic suggests possible\n  data exfiltration. Treat as urgent."'},
+    {min:3, pct:85, verdict:'Consistent decisions — one step from machine-readable.',
+     out:'RESPONSE:\n  Tier: 4\n  Reason: Unusual outbound traffic from a\n  finance server indicates a possible\n  security incident (urgent).'},
+    {min:4, pct:98, verdict:'Production-grade: deterministic, parseable, testable.',
+     out:'RESPONSE:\n  {"tier": 4, "reason": "Unusual outbound\n  traffic from a finance server indicates\n  a possible security incident."}'}
+  ];
+
+  function renderBuilder(){
+    const on = Object.values(state).filter(Boolean).length;
+    let prompt = pieces.base;
+    ['role','ctx','ex','fmt'].forEach(k => { if (state[k]) prompt += pieces[k]; });
+    const o = outputs.slice().reverse().find(o => on >= o.min);
+    outDoc.innerHTML = '<span class="dim">' + prompt.replace(/\n  \+ (.*)/g, '\n  <span class="add">+ $1</span>') +
+      '</span>\n\n' + o.out;
+    qfill.style.width = o.pct + '%';
+    qpct.textContent = o.pct + '%';
+    qverdict.textContent = o.verdict;
+  }
+  document.querySelectorAll('.toggle').forEach(t => {
+    t.addEventListener('click', () => {
+      state[t.dataset.k] = !state[t.dataset.k];
+      t.classList.toggle('on', state[t.dataset.k]);
+      renderBuilder();
+    });
+  });
+  renderBuilder();
+
+  // ---------- CoT replay ----------
+  const cot = document.getElementById('cotDemo');
+  const cotIo = new IntersectionObserver(es => {
+    es.forEach(e => { if (e.isIntersecting) { cot.classList.add('play'); cotIo.unobserve(cot); } });
+  }, {threshold:.3});
+  cotIo.observe(cot);
+  document.getElementById('cotReplay').addEventListener('click', () => {
+    cot.classList.remove('play');
+    void cot.offsetWidth;   // restart animations
+    cot.classList.add('play');
+  });
+</script>
+</body>
+</html>

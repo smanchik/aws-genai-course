@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chapter 10 · Cost Optimization &amp; Performance for GenAI</title>
+<style>
+  :root{
+    --ink:#0f1b2d; --ink-soft:#3d4f66; --paper:#f6f8fb; --card:#ffffff;
+    --aws-orange:#ff9900; --aws-orange-dark:#e88b00; --blue:#2074d5; --teal:#0d9488;
+    --purple:#7c3aed; --pink:#db2777; --line:#dde5ef; --radius:16px;
+    --shadow:0 4px 18px rgba(15,27,45,.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    background:var(--paper);color:var(--ink);line-height:1.65}
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;background:#eef2f7;
+    border-radius:5px;padding:1px 6px}
+
+  #progress{position:fixed;top:0;left:0;height:4px;width:0;background:var(--aws-orange);z-index:99}
+
+  .topnav{position:sticky;top:0;z-index:50;background:rgba(15,27,45,.92);backdrop-filter:blur(8px);
+    display:flex;align-items:center;gap:18px;padding:12px 24px;color:#c7d5e5;font-size:.85rem}
+  .topnav a{color:#c7d5e5}
+  .topnav a:hover{color:#fff;text-decoration:none}
+  .topnav .crumb{color:#ffb84d;font-weight:700}
+  .topnav .next{margin-left:auto;color:#7f97b0}
+
+  /* ============ HERO ============ */
+  .hero{position:relative;overflow:hidden;color:#fff;
+    background:linear-gradient(135deg,#0f1b2d 0%,#16324f 55%,#1c4d6b 100%);
+    padding:64px 24px 88px;text-align:center}
+  .hero .kicker{display:inline-block;background:rgba(255,153,0,.15);border:1px solid rgba(255,153,0,.5);
+    color:#ffb84d;border-radius:999px;padding:6px 18px;font-size:.8rem;letter-spacing:.14em;
+    text-transform:uppercase;font-weight:700;margin-bottom:20px}
+  .hero h1{font-size:clamp(1.9rem,4.5vw,3rem);font-weight:800;max-width:860px;margin:0 auto 16px}
+  .hero h1 em{font-style:normal;color:var(--aws-orange)}
+  .hero p{max-width:700px;margin:0 auto;color:#c7d5e5;font-size:1.05rem}
+  .mesh{position:absolute;inset:0;pointer-events:none;opacity:.45}
+  .mesh circle{fill:var(--aws-orange);animation:pulse 3s ease-in-out infinite}
+  .mesh circle:nth-of-type(2n){fill:#4dd0e1;animation-delay:.8s}
+  .mesh line{stroke:#5b7793;stroke-width:1;opacity:.35}
+  .mesh .flow{fill:none;stroke:var(--aws-orange);stroke-width:2;stroke-linecap:round;
+    stroke-dasharray:6 120;animation:dashflow 4s linear infinite;opacity:.9}
+  @keyframes pulse{0%,100%{opacity:.35;r:3}50%{opacity:1;r:5}}
+  @keyframes dashflow{to{stroke-dashoffset:-126}}
+
+  /* ============ LAYOUT ============ */
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  section{padding:60px 0 20px}
+  .section-tag{display:inline-block;font-size:.75rem;font-weight:800;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--aws-orange-dark);margin-bottom:8px}
+  h2{font-size:1.7rem;font-weight:800;margin-bottom:12px}
+  h3{font-size:1.1rem;font-weight:800}
+  .lede{color:var(--ink-soft);max-width:780px;margin-bottom:28px;font-size:1.02rem}
+  .anim-caption{text-align:center;color:var(--ink-soft);font-size:.9rem;margin:6px 0 22px}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:26px;margin-bottom:22px;
+    opacity:0;transform:translateY(20px);transition:opacity .5s ease,transform .5s ease}
+  .panel.visible{opacity:1;transform:none}
+
+  .callout{border-left:6px solid var(--aws-orange);background:#fff8ec;border-radius:12px;
+    padding:16px 20px;margin:20px 0;font-size:.94rem;color:#6b4b0e}
+  .callout b{color:#8a5b00}
+  .callout.blue{border-color:var(--blue);background:#eef5fd;color:#1d4c7c}
+  .callout.blue b{color:#164a80}
+
+  /* ============ CALCULATOR ============ */
+  .calc{display:grid;grid-template-columns:1.05fr .95fr;gap:26px}
+  @media (max-width:840px){.calc{grid-template-columns:1fr}}
+  .cctl{display:flex;flex-direction:column;gap:16px}
+  .cfield label{display:flex;justify-content:space-between;font-size:.85rem;font-weight:700;margin-bottom:6px}
+  .cfield label output{color:var(--aws-orange-dark);font-family:"SF Mono",Menlo,monospace}
+  input[type=range]{width:100%;accent-color:var(--aws-orange)}
+  .modelpick{display:flex;gap:8px;flex-wrap:wrap}
+  .modelpick button{border:1px solid var(--line);background:var(--paper);border-radius:999px;
+    padding:7px 16px;font-size:.82rem;font-weight:700;cursor:pointer;color:var(--ink-soft)}
+  .modelpick button.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .ctoggles{display:flex;gap:10px;flex-wrap:wrap}
+  .ctog{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--paper);
+    border-radius:10px;padding:8px 14px;font-size:.82rem;cursor:pointer;user-select:none;transition:all .2s ease}
+  .ctog.on{background:#eef7f1;border-color:#7fd4ae;font-weight:700}
+  .cresult{background:#101d31;border-radius:14px;padding:24px;color:#d7e3f0;display:flex;
+    flex-direction:column;gap:14px}
+  .cbig{font-size:2.3rem;font-weight:800;color:#ffb84d;font-family:"SF Mono",Menlo,monospace}
+  .cbig small{font-size:1rem;color:#9fb2c8;font-weight:400;font-family:inherit}
+  .cbar{height:22px;border-radius:8px;background:rgba(255,255,255,.08);overflow:hidden;display:flex}
+  .cbar .in{background:var(--blue);transition:width .5s ease}
+  .cbar .out{background:var(--pink);transition:width .5s ease}
+  .clegend{display:flex;gap:18px;font-size:.76rem;color:#9fb2c8}
+  .clegend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px}
+  .csave{font-size:.85rem;color:#7ee0c2;min-height:44px}
+  .csave b{color:#aef3e2}
+  .cnote{font-size:.72rem;color:#7f97b0}
+
+  /* ============ LEVERS ============ */
+  .levers{display:flex;flex-direction:column;gap:10px}
+  .lever{display:flex;align-items:center;gap:16px;background:var(--card);border:1px solid var(--line);
+    border-radius:14px;padding:14px 20px;box-shadow:var(--shadow);font-size:.92rem;
+    opacity:0;transform:translateX(-18px);transition:opacity .5s ease,transform .5s ease}
+  .lever.visible{opacity:1;transform:none}
+  .lever .rank{flex:0 0 42px;height:42px;border-radius:12px;background:var(--accent,#999);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.05rem}
+  .lever b{display:block}
+  .lever span{color:var(--ink-soft);font-size:.86rem}
+  .lever .impact{margin-left:auto;flex:0 0 auto;font-size:.75rem;font-weight:800;border-radius:999px;
+    padding:4px 13px;background:#e8f4f2;color:#0d7264;white-space:nowrap}
+  .lv1{--accent:var(--aws-orange)} .lv2{--accent:var(--blue)} .lv3{--accent:var(--purple)}
+  .lv4{--accent:var(--teal)} .lv5{--accent:var(--pink)} .lv6{--accent:#b45309}
+  @media (max-width:640px){.lever .impact{display:none}}
+
+  /* ============ CASCADE ============ */
+  .cas-svg{width:100%;max-width:840px;height:auto;display:block;margin:0 auto}
+  .cas-svg .box{fill:#fff;stroke:var(--line);stroke-width:1.5;rx:12;filter:drop-shadow(0 3px 8px rgba(15,27,45,.10))}
+  .cas-svg .label{font-size:12px;font-weight:700;fill:var(--ink)}
+  .cas-svg .sub{font-size:9.5px;fill:var(--ink-soft)}
+  .cas-svg .wire{stroke:#9fb2c8;stroke-width:2;stroke-dasharray:5 6}
+  .cas-svg .qsimple{fill:var(--teal);animation:casS 4.2s linear infinite}
+  .cas-svg .qsimple.s2{animation-delay:1.4s}.cas-svg .qsimple.s3{animation-delay:2.8s}
+  @keyframes casS{
+    0%{offset-distance:0;opacity:0}6%{opacity:1}
+    92%{offset-distance:100%;opacity:1}100%{offset-distance:100%;opacity:0}
+  }
+  .cas-svg .qhard{fill:var(--pink);animation:casH 8.4s linear infinite}
+  @keyframes casH{
+    0%{offset-distance:0;opacity:0}4%{opacity:1}
+    46%{offset-distance:48%;opacity:1}54%{offset-distance:48%;opacity:1}
+    94%{offset-distance:100%;opacity:1}100%{offset-distance:100%;opacity:0}
+  }
+
+  /* ============ CACHE ANIM ============ */
+  .cache-svg{width:100%;max-width:760px;height:auto;display:block;margin:0 auto}
+  .cache-svg .box{fill:#fff;stroke:var(--line);stroke-width:1.5;rx:12;filter:drop-shadow(0 3px 8px rgba(15,27,45,.10))}
+  .cache-svg .label{font-size:12px;font-weight:700;fill:var(--ink)}
+  .cache-svg .sub{font-size:9.5px;fill:var(--ink-soft)}
+  .cache-svg .wire{stroke:#9fb2c8;stroke-width:2;stroke-dasharray:5 6}
+  .cache-svg .hit{fill:var(--teal);animation:hitgo 5s linear infinite}
+  @keyframes hitgo{
+    0%{offset-distance:0;opacity:0}5%{opacity:1}
+    38%{offset-distance:40%;opacity:1}
+    62%{offset-distance:40%;opacity:1}
+    95%{offset-distance:0%;opacity:1}100%{opacity:0}
+  }
+  .cache-svg .miss{fill:var(--pink);animation:missgo 5s linear infinite}
+  @keyframes missgo{
+    0%,10%{offset-distance:0;opacity:0}14%{opacity:1}
+    90%{offset-distance:100%;opacity:1}100%{offset-distance:100%;opacity:0}
+  }
+  .cache-svg .flash{animation:cflash 5s linear infinite;transform-origin:center}
+  @keyframes cflash{0%,30%{opacity:.4}38%,55%{opacity:1}62%,100%{opacity:.4}}
+
+  /* ============ LATENCY BARS ============ */
+  .lat{display:flex;flex-direction:column;gap:16px}
+  .latrow{display:grid;grid-template-columns:190px 1fr;gap:14px;align-items:center;font-size:.88rem}
+  .latrow b{font-size:.85rem}
+  .latrow span{display:block;color:var(--ink-soft);font-size:.76rem}
+  .lattrack{height:26px;border-radius:8px;background:#e9eef5;position:relative;overflow:hidden}
+  .latfill{position:absolute;inset:0 auto 0 0;border-radius:8px;display:flex;align-items:center;
+    padding-left:10px;font-size:.72rem;font-weight:800;color:#fff;white-space:nowrap;
+    width:0;transition:width 1.2s cubic-bezier(.4,.9,.4,1)}
+  .lat.play .latfill{width:var(--w)}
+  .latfill.f1{background:var(--pink)} .latfill.f2{background:var(--blue)} .latfill.f3{background:var(--teal)}
+  .latfill .ttft{position:absolute;top:0;bottom:0;left:var(--t);width:3px;background:#fff}
+  @media (max-width:640px){.latrow{grid-template-columns:1fr}}
+
+  /* ============ CARDS ============ */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:20px;box-shadow:var(--shadow);position:relative;overflow:hidden;
+    opacity:0;transform:translateY(20px)}
+  .card.visible{opacity:1;transform:none;transition:opacity .5s ease,transform .5s ease,box-shadow .25s ease}
+  .card.visible:hover{transform:translateY(-5px);box-shadow:0 12px 28px rgba(15,27,45,.14)}
+  .card::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;
+    background:linear-gradient(90deg,var(--accent,#ff9900),transparent 80%)}
+  .card h4{font-size:1.02rem;margin-bottom:6px}
+  .card p{font-size:.9rem;color:var(--ink-soft)}
+  .card .use{margin-top:12px;font-size:.8rem;background:var(--paper);border-radius:10px;padding:9px 12px;
+    border:1px dashed var(--line);color:var(--ink-soft)}
+  .card .use b{color:var(--ink)}
+  .m-blue{--accent:var(--blue)} .m-purple{--accent:var(--purple)} .m-teal{--accent:var(--teal)}
+  .m-pink{--accent:var(--pink)} .m-amber{--accent:#b45309}
+
+  /* ============ CODE / ANTI ============ */
+  .codeblock{background:#101d31;border-radius:14px;padding:20px 22px;overflow-x:auto;margin:14px 0}
+  .codeblock pre{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.82rem;line-height:1.6;color:#d7e3f0}
+  .codeblock .c{color:#7f97b0}.codeblock .k{color:#ffb84d}.codeblock .s{color:#7ee0c2}
+  .anti{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--line);border-radius:14px;
+    overflow:hidden;font-size:.88rem}
+  @media (max-width:700px){.anti{grid-template-columns:1fr}}
+  .anti > div{padding:14px 18px;border-bottom:1px solid var(--line)}
+  .anti .bad{background:#fdf1f1;color:#7c2d2d}
+  .anti .good{background:#f0f9f4;color:#1c5c3c}
+  .anti .bad::before{content:"✗ ";font-weight:800;color:#b91c1c}
+  .anti .good::before{content:"✓ ";font-weight:800;color:#15803d}
+  .anti > div:nth-last-child(-n+2){border-bottom:none}
+
+  /* ============ LAB / RECAP ============ */
+  .lab{background:linear-gradient(135deg,#0d3b34,#0d9488);color:#fff;border-radius:20px;padding:30px;margin:26px 0}
+  .lab h3{font-size:1.25rem;margin-bottom:10px}
+  .lab p{color:#cdeee8;font-size:.95rem;margin-bottom:8px}
+  .lab a{color:#aef3e2;font-weight:700}
+  .recap{background:#0f1b2d;color:#fff;border-radius:20px;padding:34px;margin:48px 0 16px}
+  .recap h3{font-size:1.3rem;margin-bottom:14px}
+  .recap ol{margin-left:22px;color:#c7d5e5}
+  .recap li{margin-bottom:8px}
+  .recap b{color:#ffb84d}
+  .nav-btns{display:flex;justify-content:space-between;gap:14px;margin-top:22px;flex-wrap:wrap}
+  .next-btn{display:inline-block;background:var(--aws-orange);color:#0f1b2d;font-weight:800;
+    padding:12px 28px;border-radius:999px;transition:transform .2s ease}
+  .next-btn:hover{transform:translateY(-2px);text-decoration:none}
+  .next-btn.ghost{background:transparent;color:#c7d5e5;border:1px solid #46617f}
+  footer{padding:28px 24px 48px;text-align:center;color:var(--ink-soft);font-size:.85rem}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<nav class="topnav">
+  <a href="index.html">⌂ Course home</a>
+  <span>›</span>
+  <span class="crumb">Chapter 10 · Cost &amp; Performance</span>
+  <span class="next"><a href="chapter-09-security-privacy-governance.html">← Ch. 9</a> · <a href="chapter-11-monitoring-evaluation.html">Ch. 11 →</a></span>
+</nav>
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <svg class="mesh" viewBox="0 0 1200 420" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <line x1="120" y1="80" x2="320" y2="180"/><line x1="320" y1="180" x2="560" y2="90"/>
+    <line x1="560" y1="90" x2="820" y2="200"/><line x1="820" y1="200" x2="1080" y2="100"/>
+    <line x1="200" y1="330" x2="460" y2="260"/><line x1="460" y1="260" x2="740" y2="340"/>
+    <path class="flow" d="M120 80 L320 180 L560 90 L820 200 L1080 100"/>
+    <path class="flow" style="animation-delay:2s" d="M200 330 L460 260 L740 340"/>
+    <circle cx="120" cy="80" r="4"/><circle cx="320" cy="180" r="4"/><circle cx="560" cy="90" r="4"/>
+    <circle cx="820" cy="200" r="4"/><circle cx="1080" cy="100" r="4"/><circle cx="460" cy="260" r="4"/>
+  </svg>
+  <div style="position:relative">
+    <span class="kicker">AWS Generative AI · Chapter 10</span>
+    <h1>Cost Optimization &amp; Performance: <em>Token Economics</em></h1>
+    <p>GenAI bills differently from anything in your data center: not per server, per hour, or per GB —
+       <strong>per word</strong>. Master the token economy and the latency levers, and your AI features stay
+       fast and affordable at scale.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ================= 10.1 CALCULATOR ================= -->
+<section id="calc">
+  <span class="section-tag">10.1 · The bill, demystified</span>
+  <h2>Interactive: build your own cost model</h2>
+  <p class="lede">The whole formula: <code>cost = input_tokens × input_rate + output_tokens × output_rate</code>.
+  Everything else is multiplication. Drag the sliders and watch what actually moves the number —
+  then flip the optimization toggles:</p>
+
+  <div class="panel calc">
+    <div class="cctl">
+      <div class="cfield">
+        <label>Requests per day <output id="oReq">5,000</output></label>
+        <input type="range" id="rReq" min="100" max="100000" step="100" value="5000">
+      </div>
+      <div class="cfield">
+        <label>Avg input tokens per request <span style="font-weight:400;color:var(--ink-soft)">(prompt + context + history)</span> <output id="oIn">2,000</output></label>
+        <input type="range" id="rIn" min="100" max="20000" step="100" value="2000">
+      </div>
+      <div class="cfield">
+        <label>Avg output tokens per request <output id="oOut">500</output></label>
+        <input type="range" id="rOut" min="50" max="4000" step="50" value="500">
+      </div>
+      <div class="cfield">
+        <label>Model tier</label>
+        <div class="modelpick">
+          <button data-m="micro">Micro / small</button>
+          <button data-m="lite" class="active">Lite / mid</button>
+          <button data-m="frontier">Frontier / large</button>
+        </div>
+      </div>
+      <div class="cfield">
+        <label>Optimizations</label>
+        <div class="ctoggles">
+          <span class="ctog" id="tCache">⚡ 30% cache hit rate</span>
+          <span class="ctog" id="tBatch">📦 Half the volume via batch (−50%)</span>
+          <span class="ctog" id="tTrim">✂️ Trim context &amp; cap output (−25% tokens)</span>
+        </div>
+      </div>
+    </div>
+    <div class="cresult">
+      <div><span style="font-size:.78rem;color:#9fb2c8;text-transform:uppercase;letter-spacing:.08em">Estimated monthly cost</span>
+        <div class="cbig" id="cTotal">$—<small> /month</small></div></div>
+      <div>
+        <div class="cbar"><div class="in" id="cbIn"></div><div class="out" id="cbOut"></div></div>
+        <div class="clegend" style="margin-top:8px">
+          <span><i style="background:var(--blue)"></i>Input tokens <b id="cIn"></b></span>
+          <span><i style="background:var(--pink)"></i>Output tokens <b id="cOut"></b></span>
+        </div>
+      </div>
+      <div class="csave" id="cSave"></div>
+      <p class="cnote">Rates are illustrative teaching numbers (per 1M tokens: micro $0.05/$0.20 · lite $0.30/$1.20 ·
+      frontier $3.00/$15.00 in/out). Always price with the current
+      <a href="https://aws.amazon.com/bedrock/pricing/" target="_blank" rel="noopener" style="color:#7ee0c2">Bedrock pricing page</a>.</p>
+    </div>
+  </div>
+
+  <div class="callout"><b>Three things the sliders teach:</b> ① output tokens cost ~4–5× input tokens — cap them;
+  ② the model tier is a ~60× swing — right-size before anything else; ③ that "input tokens" slider is mostly
+  <em>your own context and history</em> (Ch. 8's hidden cost) — trim what you resend.</div>
+</section>
+
+<!-- ================= 10.2 LEVERS ================= -->
+<section id="levers">
+  <span class="section-tag">10.2 · Ranked by payoff</span>
+  <h2>The six cost levers, in the order to pull them</h2>
+  <div class="levers">
+    <div class="lever lv1"><div class="rank">1</div>
+      <div><b>Right-size the model</b><span>Smallest model that passes your quality bar (Ch. 2). Run your golden
+      test set against a cheaper tier — it passes more often than you'd guess.</span></div>
+      <span class="impact">up to 10–60×</span></div>
+    <div class="lever lv2"><div class="rank">2</div>
+      <div><b>Trim the prompt &amp; context</b><span>Summarize conversation history instead of replaying it; retrieve 3
+      chunks, not 10; delete the throat-clearing from your system prompt.</span></div>
+      <span class="impact">2–5×</span></div>
+    <div class="lever lv3"><div class="rank">3</div>
+      <div><b>Cap &amp; shape output</b><span>maxTokens per use case; "answer in ≤3 sentences"; JSON instead of prose.
+      Output is the expensive direction.</span></div>
+      <span class="impact">2–4×</span></div>
+    <div class="lever lv4"><div class="rank">4</div>
+      <div><b>Cache</b><span>Exact-match, semantic, and Bedrock prompt caching (10.4). Repeat questions are free
+      money.</span></div>
+      <span class="impact">∝ hit rate</span></div>
+    <div class="lever lv5"><div class="rank">5</div>
+      <div><b>Batch what nobody waits for</b><span>~50% discount for async workloads (Ch. 2, Ch. 8 pattern 5).</span></div>
+      <span class="impact">2× on batch traffic</span></div>
+    <div class="lever lv6"><div class="rank">6</div>
+      <div><b>Buy provisioned throughput</b><span>Only after traffic is steady and measured — the RI logic you know:
+      commit to the baseline, burst on-demand.</span></div>
+      <span class="impact">volume discount</span></div>
+  </div>
+</section>
+
+<!-- ================= 10.3 CASCADE ================= -->
+<section id="cascade">
+  <span class="section-tag">10.3 · The router pattern</span>
+  <h2>Model cascading: cheap first, escalate when needed</h2>
+  <p class="lede">Most traffic is easy. A <strong>router</strong> sends every request to a small model first;
+  only requests it can't handle confidently escalate to the frontier tier. Watch: teal = simple queries
+  (~80%), pink = the hard one that escalates.</p>
+
+  <div class="panel">
+    <svg class="cas-svg" viewBox="0 0 840 260" role="img" aria-label="Animated model cascade: most queries are answered by a small model, hard ones escalate to a large model">
+      <rect class="box" x="16" y="96" width="130" height="64"/>
+      <text class="label" x="81" y="123" text-anchor="middle">Requests</text>
+      <text class="sub" x="81" y="140" text-anchor="middle">all traffic</text>
+
+      <rect class="box" x="196" y="96" width="140" height="64"/>
+      <text class="label" x="266" y="118" text-anchor="middle">Router</text>
+      <text class="sub" x="266" y="134" text-anchor="middle">rules · classifier ·</text>
+      <text class="sub" x="266" y="147" text-anchor="middle">confidence check</text>
+
+      <rect class="box" x="416" y="30" width="170" height="70" stroke="#0d9488" stroke-width="2"/>
+      <text class="label" x="501" y="56" text-anchor="middle">Small model</text>
+      <text class="sub" x="501" y="73" text-anchor="middle">~80% of traffic</text>
+      <text class="sub" x="501" y="87" text-anchor="middle">≈ 1× cost · fastest</text>
+
+      <rect class="box" x="416" y="160" width="170" height="70" stroke="#db2777" stroke-width="2"/>
+      <text class="label" x="501" y="186" text-anchor="middle">Frontier model</text>
+      <text class="sub" x="501" y="203" text-anchor="middle">~20% of traffic</text>
+      <text class="sub" x="501" y="217" text-anchor="middle">≈ 10–60× cost · deepest</text>
+
+      <rect class="box" x="676" y="96" width="130" height="64"/>
+      <text class="label" x="741" y="123" text-anchor="middle">Response</text>
+      <text class="sub" x="741" y="140" text-anchor="middle">blended cost ≈ 3×</text>
+
+      <line class="wire" x1="150" y1="128" x2="192" y2="128"/>
+      <line class="wire" x1="340" y1="112" x2="412" y2="70"/>
+      <line class="wire" x1="340" y1="144" x2="412" y2="190"/>
+      <line class="wire" x1="590" y1="65" x2="672" y2="112"/>
+      <line class="wire" x1="590" y1="195" x2="672" y2="144"/>
+
+      <circle class="qsimple" r="6" style="offset-path:path('M150 128 L340 112 L412 70 L590 65 L672 112')"/>
+      <circle class="qsimple s2" r="6" style="offset-path:path('M150 128 L340 112 L412 70 L590 65 L672 112')"/>
+      <circle class="qsimple s3" r="6" style="offset-path:path('M150 128 L340 112 L412 70 L590 65 L672 112')"/>
+      <circle class="qhard" r="6" style="offset-path:path('M150 128 L340 144 L412 190 L590 195 L672 144')"/>
+    </svg>
+    <p class="anim-caption">Bedrock's <b>Intelligent Prompt Routing</b> does this as a managed feature within a
+    model family; build your own router when you need custom rules (Ch. 8's AppConfig-driven model selection).</p>
+  </div>
+</section>
+
+<!-- ================= 10.4 CACHING ================= -->
+<section id="cache">
+  <span class="section-tag">10.4 · Free money</span>
+  <h2>Three caches, three layers</h2>
+
+  <div class="panel">
+    <svg class="cache-svg" viewBox="0 0 760 230" role="img" aria-label="Animated cache: repeated question served from cache in milliseconds, new question goes through to the model">
+      <rect class="box" x="16" y="86" width="130" height="64"/>
+      <text class="label" x="81" y="113" text-anchor="middle">Question</text>
+      <text class="sub" x="81" y="130" text-anchor="middle">"reset VPN?" (again)</text>
+
+      <g class="flash">
+        <rect class="box" x="236" y="86" width="150" height="64" stroke="#0d9488" stroke-width="2"/>
+        <text class="label" x="311" y="108" text-anchor="middle">Cache</text>
+        <text class="sub" x="311" y="124" text-anchor="middle">ElastiCache / DynamoDB</text>
+        <text class="sub" x="311" y="138" text-anchor="middle">hit → ms, $0</text>
+      </g>
+
+      <rect class="box" x="536" y="86" width="180" height="64" stroke="#ff9900" stroke-width="2"/>
+      <text class="label" x="626" y="108" text-anchor="middle">Bedrock</text>
+      <text class="sub" x="626" y="124" text-anchor="middle">miss only → seconds, $</text>
+      <text class="sub" x="626" y="138" text-anchor="middle">result written back</text>
+
+      <line class="wire" x1="150" y1="118" x2="232" y2="118"/>
+      <line class="wire" x1="390" y1="118" x2="532" y2="118"/>
+
+      <circle class="hit" r="6" style="offset-path:path('M150 118 L311 118 L150 118')"/>
+      <circle class="miss" r="6" style="offset-path:path('M150 118 L390 118 L532 118')"/>
+      <text class="sub" x="311" y="185" text-anchor="middle" fill="#0d9488" font-weight="700">teal: cache hit — answered in milliseconds</text>
+      <text class="sub" x="311" y="202" text-anchor="middle" fill="#db2777" font-weight="700">pink: miss — pays the token toll once, fills the cache</text>
+    </svg>
+  </div>
+
+  <div class="grid">
+    <div class="card m-teal">
+      <h4>1 · Exact-match cache</h4>
+      <p>Hash the normalized prompt; store the response with a TTL. Trivial to build (Ch. 8), perfect for
+      FAQ-shaped traffic.</p>
+      <div class="use"><b>Catch:</b> "reset VPN?" vs "how do I reset the VPN?" are different keys — misses meaning.</div>
+    </div>
+    <div class="card m-blue">
+      <h4>2 · Semantic cache</h4>
+      <p>Embed the question (Ch. 4!) and match by similarity above a threshold — those two VPN questions now hit
+      the same entry.</p>
+      <div class="use"><b>Catch:</b> tune the threshold carefully; a wrong-but-similar answer is worse than a miss.</div>
+    </div>
+    <div class="card m-purple">
+      <h4>3 · Bedrock prompt caching</h4>
+      <p>A managed feature: mark the static prefix of your prompt (system prompt, few-shot examples, big document)
+      as a cache checkpoint — repeated prefixes are reprocessed at a fraction of the cost and faster.</p>
+      <div class="use"><b>Best for:</b> long shared context asked many questions — "chat with this contract."</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 10.5 LATENCY ================= -->
+<section id="latency">
+  <span class="section-tag">10.5 · Performance</span>
+  <h2>Latency: manage the wait, then shrink it</h2>
+  <p class="lede">Two numbers rule GenAI latency: <strong>time to first token</strong> (TTFT — when the user sees
+  life) and <strong>tokens per second</strong> (how fast it finishes). The same 500-token answer, three ways —
+  the white tick marks TTFT:</p>
+
+  <div class="panel">
+    <div class="lat" id="latDemo">
+      <div class="latrow">
+        <div><b>Blocking call, large model</b><span>user stares at a spinner</span></div>
+        <div class="lattrack"><div class="latfill f1" style="--w:96%"><span class="ttft" style="--t:94%"></span>first sight of text: ~14s 😖</div></div>
+      </div>
+      <div class="latrow">
+        <div><b>Streaming, large model</b><span>same total time, different experience</span></div>
+        <div class="lattrack"><div class="latfill f2" style="--w:96%"><span class="ttft" style="--t:8%"></span>reading at ~1.2s ✓ (total unchanged)</div></div>
+      </div>
+      <div class="latrow">
+        <div><b>Streaming, right-sized model</b><span>smaller model, tighter output cap</span></div>
+        <div class="lattrack"><div class="latfill f3" style="--w:38%"><span class="ttft" style="--t:12%"></span>reading at ~0.5s · done in ~5s 🚀</div></div>
+      </div>
+    </div>
+    <button class="replay" id="latReplay" style="margin-top:16px;background:var(--ink);color:#fff;border:none;border-radius:999px;padding:8px 22px;font-size:.85rem;font-weight:700;cursor:pointer">↻ Replay</button>
+  </div>
+
+  <div class="grid" style="margin-top:8px">
+    <div class="card m-teal">
+      <h4>🏎️ Latency-optimized inference</h4>
+      <p>Some Bedrock models offer a latency-optimized tier — one request flag for meaningfully faster tokens,
+      at a premium. Reserve it for the interactions where speed is the feature.</p>
+    </div>
+    <div class="card m-blue">
+      <h4>🧵 Parallelize the independent</h4>
+      <p>Summarizing 5 documents? Five concurrent calls, not a loop. Watch quota headroom (Ch. 8) — parallelism
+      spends tokens-per-minute faster.</p>
+    </div>
+    <div class="card m-amber">
+      <h4>📏 Shorter output = faster output</h4>
+      <p>Generation time scales with output length. The output cap from lever #3 is also your best latency lever —
+      cost and speed improve together.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 10.6 VISIBILITY ================= -->
+<section id="visibility">
+  <span class="section-tag">10.6 · You can't optimize blind</span>
+  <h2>Cost visibility: know who spends what</h2>
+  <p class="lede">On-demand Bedrock usage lands in Cost Explorer per model — but not per <em>application</em>,
+  unless you set that up:</p>
+
+  <div class="codeblock"><pre><span class="c"># Application inference profile: tag a model per app for cost allocation</span>
+aws bedrock create-inference-profile \
+  --inference-profile-name <span class="s">claims-app-nova-lite</span> \
+  --model-source copyFrom=<span class="s">arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-lite-v1:0</span> \
+  --tags key=<span class="s">app</span>,value=<span class="s">claims</span> key=<span class="s">cost-center</span>,value=<span class="s">ops-migration</span>
+
+<span class="c"># Apps invoke via THEIR profile ARN → spend shows up per app/cost-center
+# in Cost Explorer, and per-app CloudWatch metrics come free</span></pre></div>
+
+  <ul class="levers" style="margin-top:14px">
+    <li class="lever lv2"><div class="rank">📊</div>
+      <div><b>Dashboards from invocation metrics</b><span>CloudWatch: input/output token counts per profile,
+      invocations, latency percentiles — the FinOps dashboard your migration program already has, extended.</span></div></li>
+    <li class="lever lv5"><div class="rank">🚨</div>
+      <div><b>Budgets + anomaly detection</b><span>AWS Budgets per cost-center tag; Cost Anomaly Detection catches
+      the runaway loop (Ch. 5's stopping conditions are the other half of that defense).</span></div></li>
+    <li class="lever lv4"><div class="rank">🧾</div>
+      <div><b>Unit economics</b><span>Track <em>cost per resolved ticket / per document / per conversation</em> —
+      the number the business actually understands, and the one that justifies the feature.</span></div></li>
+  </ul>
+</section>
+
+<!-- ================= 10.7 ANTIPATTERNS ================= -->
+<section id="antipatterns">
+  <span class="section-tag">10.7 · Field guide</span>
+  <h2>Cost &amp; performance failures → quick fixes</h2>
+  <div class="panel" style="padding:0;overflow:hidden">
+    <div class="anti">
+      <div class="bad">Frontier model for everything "because quality"</div>
+      <div class="good">Golden test set on the small tier first — route up only what fails (10.3)</div>
+      <div class="bad">Replaying the full conversation history every turn</div>
+      <div class="good">Sliding window + running summary; history is your biggest silent input-token bill</div>
+      <div class="bad">No maxTokens set — "the model knows when to stop"</div>
+      <div class="good">Cap per use case; output tokens are the expensive, slow direction</div>
+      <div class="bad">Buying provisioned throughput at launch "to be safe"</div>
+      <div class="good">Launch on-demand, measure 4–6 weeks, then commit to the observed baseline</div>
+      <div class="bad">One shared account/profile — monthly bill is a mystery blob</div>
+      <div class="good">Application inference profiles + tags → per-app spend in Cost Explorer (10.6)</div>
+      <div class="bad">Chasing p50 latency while p95 users suffer</div>
+      <div class="good">Alarm on p95 TTFT; stream everything human-facing — perceived speed is the metric</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= LAB ================= -->
+<section id="lab">
+  <div class="lab">
+    <h3>🧪 Hands-on lab (~60 min)</h3>
+    <p>1. Rebuild your Chapter 8 app's cost model in the section 10.1 calculator with real numbers from your
+    invocation logs (Ch. 9) — then check the actuals in Cost Explorer.</p>
+    <p>2. Run your Chapter 3 golden test set against a model one tier smaller — record the pass rate and the
+    cost delta. That's lever #1, quantified.</p>
+    <p>3. Add an exact-match cache (DynamoDB, hashed prompt key, TTL) in front of your app and measure the hit
+    rate after a day of use.</p>
+    <p>4. Create an <strong>application inference profile</strong> with cost-allocation tags and switch your app to it.</p>
+    <p>5. Deeper: <a href="https://aws.amazon.com/bedrock/pricing/" target="_blank" rel="noopener">Bedrock pricing</a> ·
+    <a href="https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html" target="_blank" rel="noopener">prompt caching docs</a> ·
+    <a href="https://docs.aws.amazon.com/wellarchitected/latest/generative-ai-lens/generative-ai-lens.html" target="_blank" rel="noopener">GenAI Lens: cost pillar</a>.</p>
+  </div>
+</section>
+
+<!-- ================= RECAP ================= -->
+<section id="recap">
+  <div class="recap">
+    <h3>🎯 Chapter 10 takeaways</h3>
+    <ol>
+      <li>The bill is <b>tokens × rate</b>, and output tokens cost ~4–5× input — cap and shape output first.</li>
+      <li>Pull levers in order: <b>right-size the model</b> (10–60×), trim context, cap output, cache, batch, then provisioned throughput last.</li>
+      <li><b>Model cascading</b> routes ~80% of traffic to cheap models and escalates the rest — blended cost near the small tier, quality near the large one.</li>
+      <li>Three cache layers: exact-match, semantic, and <b>Bedrock prompt caching</b> for long shared context.</li>
+      <li>Latency = <b>TTFT + tokens/sec</b>: stream for perceived speed, right-size and cap for real speed, parallelize independent calls.</li>
+      <li>Visibility before optimization: <b>application inference profiles</b> + tags for per-app spend, budgets and anomaly alarms, and unit economics the business understands.</li>
+    </ol>
+    <div class="nav-btns">
+      <a class="next-btn ghost" href="chapter-09-security-privacy-governance.html">← Chapter 9: Security, Privacy &amp; Governance</a>
+      <a class="next-btn" href="chapter-11-monitoring-evaluation.html">Next → Chapter 11: Monitoring, Evaluation &amp; Troubleshooting</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  AWS GenAI for IT Professionals · Chapter 10 of 12 · All prices illustrative — verify on the
+  <a href="https://aws.amazon.com/bedrock/pricing/" target="_blank" rel="noopener">Amazon Bedrock pricing page</a>.
+</footer>
+
+<script>
+  // Scroll progress
+  const bar = document.getElementById('progress');
+  addEventListener('scroll', () => {
+    const h = document.documentElement;
+    bar.style.width = (h.scrollTop / (h.scrollHeight - h.clientHeight) * 100) + '%';
+  }, {passive:true});
+
+  // Reveal on scroll
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); } });
+  }, {threshold:.12});
+  document.querySelectorAll('.panel, .card, .lever').forEach((el, i) => {
+    el.style.transitionDelay = (i % 5) * 60 + 'ms';
+    io.observe(el);
+  });
+
+  // ---------- Cost calculator ----------
+  // Illustrative rates per 1M tokens [input, output]
+  const rates = {micro:[0.05,0.20], lite:[0.30,1.20], frontier:[3.00,15.00]};
+  let model = 'lite';
+  const tog = {cache:false, batch:false, trim:false};
+  const $ = id => document.getElementById(id);
+  const fmt = n => n >= 1000 ? '$' + Math.round(n).toLocaleString() : '$' + n.toFixed(2);
+
+  function calc(){
+    const req = +$('rReq').value, tin = +$('rIn').value, tout = +$('rOut').value;
+    $('oReq').textContent = req.toLocaleString();
+    $('oIn').textContent = tin.toLocaleString();
+    $('oOut').textContent = tout.toLocaleString();
+    const [ri, ro] = rates[model];
+    const base = req * 30 * (tin * ri + tout * ro) / 1e6;
+    let cost = base, notes = [];
+    let effIn = tin, effOut = tout;
+    if (tog.trim){ effIn *= .75; effOut *= .75; notes.push('trimming −25% tokens'); }
+    let vol = req;
+    let inCost = vol * 30 * effIn * ri / 1e6, outCost = vol * 30 * effOut * ro / 1e6;
+    if (tog.cache){ inCost *= .7; outCost *= .7; notes.push('30% served from cache'); }
+    if (tog.batch){
+      // half the volume at 50% price
+      inCost = inCost * .5 + inCost * .5 * .5;
+      outCost = outCost * .5 + outCost * .5 * .5;
+      notes.push('half the volume batched at −50%');
+    }
+    cost = inCost + outCost;
+    $('cTotal').innerHTML = fmt(cost) + '<small> /month</small>';
+    const total = inCost + outCost || 1;
+    $('cbIn').style.width = (inCost / total * 100) + '%';
+    $('cbOut').style.width = (outCost / total * 100) + '%';
+    $('cIn').textContent = ' ' + fmt(inCost);
+    $('cOut').textContent = ' ' + fmt(outCost);
+    if (notes.length){
+      const saved = base - cost;
+      $('cSave').innerHTML = `Optimizations active (${notes.join(', ')}): saving <b>${fmt(saved)}/month</b> vs the unoptimized ${fmt(base)}.`;
+    } else {
+      $('cSave').innerHTML = 'No optimizations applied — flip the toggles to see Chapter 10 in action.';
+    }
+  }
+  ['rReq','rIn','rOut'].forEach(id => $(id).addEventListener('input', calc));
+  document.querySelectorAll('.modelpick button').forEach(b =>
+    b.addEventListener('click', () => {
+      model = b.dataset.m;
+      document.querySelectorAll('.modelpick button').forEach(x =>
+        x.classList.toggle('active', x === b));
+      calc();
+    }));
+  [['tCache','cache'],['tBatch','batch'],['tTrim','trim']].forEach(([id,k]) => {
+    $(id).addEventListener('click', () => {
+      tog[k] = !tog[k];
+      $(id).classList.toggle('on', tog[k]);
+      calc();
+    });
+  });
+  calc();
+
+  // ---------- Latency bars ----------
+  const latDemo = $('latDemo');
+  const latIo = new IntersectionObserver(es => {
+    es.forEach(e => { if (e.isIntersecting){ latDemo.classList.add('play'); latIo.unobserve(latDemo); } });
+  }, {threshold:.4});
+  latIo.observe(latDemo);
+  $('latReplay').addEventListener('click', () => {
+    latDemo.classList.remove('play');
+    void latDemo.offsetWidth;
+    latDemo.classList.add('play');
+  });
+</script>
+</body>
+</html>

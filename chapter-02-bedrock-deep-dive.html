@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chapter 2 · Amazon Bedrock Deep Dive: Models &amp; Inference</title>
+<style>
+  :root{
+    --ink:#0f1b2d; --ink-soft:#3d4f66; --paper:#f6f8fb; --card:#ffffff;
+    --aws-orange:#ff9900; --aws-orange-dark:#e88b00; --blue:#2074d5; --teal:#0d9488;
+    --purple:#7c3aed; --pink:#db2777; --line:#dde5ef; --radius:16px;
+    --shadow:0 4px 18px rgba(15,27,45,.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    background:var(--paper);color:var(--ink);line-height:1.65}
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;background:#eef2f7;
+    border-radius:5px;padding:1px 6px}
+
+  #progress{position:fixed;top:0;left:0;height:4px;width:0;background:var(--aws-orange);z-index:99}
+
+  /* ============ TOP NAV ============ */
+  .topnav{position:sticky;top:0;z-index:50;background:rgba(15,27,45,.92);backdrop-filter:blur(8px);
+    display:flex;align-items:center;gap:18px;padding:12px 24px;color:#c7d5e5;font-size:.85rem}
+  .topnav a{color:#c7d5e5}
+  .topnav a:hover{color:#fff;text-decoration:none}
+  .topnav .crumb{color:#ffb84d;font-weight:700}
+  .topnav .next{margin-left:auto;color:#7f97b0}
+
+  /* ============ HERO ============ */
+  .hero{position:relative;overflow:hidden;color:#fff;
+    background:linear-gradient(135deg,#0f1b2d 0%,#16324f 55%,#1c4d6b 100%);
+    padding:64px 24px 88px;text-align:center}
+  .hero .kicker{display:inline-block;background:rgba(255,153,0,.15);border:1px solid rgba(255,153,0,.5);
+    color:#ffb84d;border-radius:999px;padding:6px 18px;font-size:.8rem;letter-spacing:.14em;
+    text-transform:uppercase;font-weight:700;margin-bottom:20px}
+  .hero h1{font-size:clamp(1.9rem,4.5vw,3rem);font-weight:800;max-width:840px;margin:0 auto 16px}
+  .hero h1 em{font-style:normal;color:var(--aws-orange)}
+  .hero p{max-width:680px;margin:0 auto;color:#c7d5e5;font-size:1.05rem}
+  .mesh{position:absolute;inset:0;pointer-events:none;opacity:.45}
+  .mesh circle{fill:var(--aws-orange);animation:pulse 3s ease-in-out infinite}
+  .mesh circle:nth-of-type(2n){fill:#4dd0e1;animation-delay:.8s}
+  .mesh line{stroke:#5b7793;stroke-width:1;opacity:.35}
+  .mesh .flow{fill:none;stroke:var(--aws-orange);stroke-width:2;stroke-linecap:round;
+    stroke-dasharray:6 120;animation:dashflow 4s linear infinite;opacity:.9}
+  @keyframes pulse{0%,100%{opacity:.35;r:3}50%{opacity:1;r:5}}
+  @keyframes dashflow{to{stroke-dashoffset:-126}}
+
+  /* ============ LAYOUT ============ */
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  section{padding:60px 0 20px}
+  .section-tag{display:inline-block;font-size:.75rem;font-weight:800;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--aws-orange-dark);margin-bottom:8px}
+  h2{font-size:1.7rem;font-weight:800;margin-bottom:12px}
+  .lede{color:var(--ink-soft);max-width:780px;margin-bottom:28px;font-size:1.02rem}
+  .anim-caption{text-align:center;color:var(--ink-soft);font-size:.9rem;margin:6px 0 22px}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:26px;margin-bottom:22px;
+    opacity:0;transform:translateY(20px);transition:opacity .5s ease,transform .5s ease}
+  .panel.visible{opacity:1;transform:none}
+
+  .callout{border-left:6px solid var(--aws-orange);background:#fff8ec;border-radius:12px;
+    padding:16px 20px;margin:20px 0;font-size:.94rem;color:#6b4b0e}
+  .callout b{color:#8a5b00}
+  .callout.blue{border-color:var(--blue);background:#eef5fd;color:#1d4c7c}
+  .callout.blue b{color:#164a80}
+
+  /* ============ TOKENIZER ANIM ============ */
+  .token-stage{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:20px;
+    background:#101d31;border-radius:14px;min-height:76px}
+  .tok{color:#fff;border-radius:8px;padding:6px 12px;font-family:"SF Mono",Menlo,monospace;
+    font-size:.9rem;opacity:0;transform:translateY(10px) scale(.9);
+    animation:tokin .45s ease forwards}
+  .tok:nth-child(6n+1){background:#2074d5}.tok:nth-child(6n+2){background:#7c3aed}
+  .tok:nth-child(6n+3){background:#0d9488}.tok:nth-child(6n+4){background:#db2777}
+  .tok:nth-child(6n+5){background:#b45309}.tok:nth-child(6n+6){background:#4d7c0f}
+  @keyframes tokin{to{opacity:1;transform:none}}
+  .replay{display:inline-block;margin-top:12px;background:var(--ink);color:#fff;border:none;
+    border-radius:999px;padding:8px 22px;font-size:.85rem;font-weight:700;cursor:pointer}
+  .replay:hover{background:#22344e}
+
+  /* ============ CONVERSE FLOW ANIM ============ */
+  .flow-svg{width:100%;height:auto;max-width:880px;display:block;margin:0 auto}
+  .flow-svg .box{fill:#fff;stroke:var(--line);stroke-width:1.5;rx:12;filter:drop-shadow(0 3px 8px rgba(15,27,45,.10))}
+  .flow-svg .label{font-size:13px;font-weight:700;fill:var(--ink)}
+  .flow-svg .sub{font-size:10.5px;fill:var(--ink-soft)}
+  .flow-svg .wire{stroke:#9fb2c8;stroke-width:2;stroke-dasharray:5 6}
+  .flow-svg .reqdot{fill:var(--blue);animation:reqgo 4.5s linear infinite}
+  @keyframes reqgo{
+    0%{transform:translate(0,0);opacity:0}5%{opacity:1}
+    30%{transform:translate(255px,0);opacity:1}
+    38%{transform:translate(255px,0);opacity:0}100%{opacity:0}
+  }
+  .flow-svg .resdot{fill:var(--teal);opacity:0;animation:resgo 4.5s linear infinite}
+  .flow-svg .resdot.d2{animation-delay:.35s}.flow-svg .resdot.d3{animation-delay:.7s}
+  .flow-svg .resdot.d4{animation-delay:1.05s}
+  @keyframes resgo{
+    0%,45%{transform:translate(0,0);opacity:0}
+    50%{opacity:1}
+    78%{transform:translate(-255px,0);opacity:1}
+    84%{transform:translate(-255px,0);opacity:0}100%{opacity:0}
+  }
+  .flow-svg .brain{animation:think 4.5s ease-in-out infinite;transform-origin:640px 96px}
+  @keyframes think{0%,28%{opacity:.4}34%,46%{opacity:1}55%,100%{opacity:.4}}
+
+  /* ============ PARAMS (temperature) ============ */
+  .params{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  @media (max-width:760px){.params{grid-template-columns:1fr}}
+  .bars{display:flex;align-items:flex-end;gap:10px;height:150px;padding:14px 10px 0}
+  .bar{flex:1;border-radius:8px 8px 0 0;background:var(--blue);position:relative;
+    transition:height 1s cubic-bezier(.5,1.6,.4,1)}
+  .bar span{position:absolute;bottom:-24px;left:0;right:0;text-align:center;font-size:.72rem;color:var(--ink-soft)}
+  .bar.hot{background:var(--pink)}
+  .bar-note{margin-top:36px;font-size:.88rem;color:var(--ink-soft)}
+  .temp-toggle{display:flex;gap:8px;margin-bottom:10px}
+  .temp-toggle button{border:1px solid var(--line);background:var(--paper);border-radius:999px;
+    padding:6px 18px;font-size:.83rem;font-weight:700;cursor:pointer;color:var(--ink-soft)}
+  .temp-toggle button.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .param-list{list-style:none}
+  .param-list li{display:flex;gap:12px;padding:11px 0;border-bottom:1px solid var(--line);font-size:.92rem}
+  .param-list li:last-child{border-bottom:none}
+  .param-list b{flex:0 0 130px;color:var(--ink)}
+  .param-list span{color:var(--ink-soft)}
+
+  /* ============ CODE BLOCK ============ */
+  .codeblock{background:#101d31;border-radius:14px;padding:20px 22px;overflow-x:auto;margin:14px 0}
+  .codeblock pre{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.83rem;line-height:1.6;color:#d7e3f0}
+  .codeblock .c{color:#7f97b0}.codeblock .k{color:#ffb84d}.codeblock .s{color:#7ee0c2}
+
+  /* ============ MODEL PICKER CARDS ============ */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:20px;box-shadow:var(--shadow);position:relative;overflow:hidden;
+    opacity:0;transform:translateY(20px)}
+  .card.visible{opacity:1;transform:none;transition:opacity .5s ease,transform .5s ease,box-shadow .25s ease}
+  .card.visible:hover{transform:translateY(-5px);box-shadow:0 12px 28px rgba(15,27,45,.14)}
+  .card::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;
+    background:linear-gradient(90deg,var(--accent,#ff9900),transparent 80%)}
+  .card h4{font-size:1.02rem;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+  .card p{font-size:.9rem;color:var(--ink-soft)}
+  .card .oneliner{display:block;font-size:.78rem;font-weight:700;color:var(--accent,var(--aws-orange-dark));
+    text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+  .card .meter{display:flex;gap:6px;margin-top:12px;font-size:.72rem;color:var(--ink-soft);flex-wrap:wrap}
+  .card .meter i{font-style:normal;background:var(--paper);border:1px solid var(--line);
+    border-radius:999px;padding:3px 10px}
+  .m-blue{--accent:var(--blue)} .m-purple{--accent:var(--purple)} .m-teal{--accent:var(--teal)}
+  .m-pink{--accent:var(--pink)} .m-amber{--accent:#b45309}
+
+  /* ============ PRICING ANIM ============ */
+  .pricing{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px}
+  .price-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:22px;text-align:center}
+  .price-card h4{font-size:1rem;margin-bottom:4px}
+  .price-card .tagline{font-size:.78rem;color:var(--aws-orange-dark);font-weight:700;
+    text-transform:uppercase;letter-spacing:.06em}
+  .price-card p{font-size:.87rem;color:var(--ink-soft);margin-top:8px}
+  .price-viz{height:66px;margin:14px auto 4px;display:flex;align-items:center;justify-content:center;gap:5px}
+  .drip{width:10px;height:10px;border-radius:50%;background:var(--blue);animation:drip 1.6s ease-in infinite}
+  .drip:nth-child(2){animation-delay:.5s}.drip:nth-child(3){animation-delay:1s}
+  @keyframes drip{0%{transform:translateY(-22px);opacity:0}30%{opacity:1}100%{transform:translateY(22px);opacity:0}}
+  .pipe{width:100%;max-width:130px;height:16px;border-radius:999px;background:linear-gradient(90deg,var(--teal) 0 70%,#d1e7e3 70%);
+    position:relative;overflow:hidden}
+  .pipe::after{content:"";position:absolute;inset:0;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.7),transparent);
+    animation:sheen 2.2s linear infinite}
+  @keyframes sheen{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+  .crate{width:15px;height:15px;background:var(--purple);border-radius:3px;animation:crate 2.8s ease-in-out infinite}
+  .crate:nth-child(2){animation-delay:.2s}.crate:nth-child(3){animation-delay:.4s}
+  .crate:nth-child(4){animation-delay:.6s}
+  @keyframes crate{0%,15%{transform:translateY(0)}45%,60%{transform:translateY(-20px)}90%,100%{transform:translateY(0)}}
+
+  /* ============ CROSS REGION ANIM ============ */
+  .region-svg{width:100%;max-width:760px;height:auto;display:block;margin:0 auto}
+  .region-svg .reg{fill:#fff;stroke:var(--line);stroke-width:1.5;rx:14;filter:drop-shadow(0 3px 8px rgba(15,27,45,.10))}
+  .region-svg .rlabel{font-size:12.5px;font-weight:700;fill:var(--ink)}
+  .region-svg .rsub{font-size:10px;fill:var(--ink-soft)}
+  .region-svg .route{fill:var(--aws-orange);animation:route1 5s linear infinite}
+  .region-svg .route.alt{fill:var(--pink);animation:route2 5s linear infinite}
+  @keyframes route1{
+    0%{transform:translate(0,0);opacity:0}4%{opacity:1}
+    38%{transform:translate(240px,-58px);opacity:1}44%{opacity:0}100%{opacity:0}
+  }
+  @keyframes route2{
+    0%,48%{transform:translate(0,0);opacity:0}52%{opacity:1}
+    88%{transform:translate(240px,58px);opacity:1}94%{opacity:0}100%{opacity:0}
+  }
+  .region-svg .busy{animation:busyblink 5s linear infinite}
+  @keyframes busyblink{0%,40%{opacity:0}46%,90%{opacity:1}96%,100%{opacity:0}}
+
+  /* ============ LAB / RECAP ============ */
+  .lab{background:linear-gradient(135deg,#0d3b34,#0d9488);color:#fff;border-radius:20px;padding:30px;margin:26px 0}
+  .lab h3{font-size:1.25rem;margin-bottom:10px}
+  .lab p{color:#cdeee8;font-size:.95rem;margin-bottom:8px}
+  .lab a{color:#aef3e2;font-weight:700}
+  .recap{background:#0f1b2d;color:#fff;border-radius:20px;padding:34px;margin:48px 0 16px}
+  .recap h3{font-size:1.3rem;margin-bottom:14px}
+  .recap ol{margin-left:22px;color:#c7d5e5}
+  .recap li{margin-bottom:8px}
+  .recap b{color:#ffb84d}
+  .nav-btns{display:flex;justify-content:space-between;gap:14px;margin-top:22px;flex-wrap:wrap}
+  .next-btn{display:inline-block;background:var(--aws-orange);color:#0f1b2d;font-weight:800;
+    padding:12px 28px;border-radius:999px;transition:transform .2s ease}
+  .next-btn:hover{transform:translateY(-2px);text-decoration:none}
+  .next-btn.ghost{background:transparent;color:#c7d5e5;border:1px solid #46617f}
+  footer{padding:28px 24px 48px;text-align:center;color:var(--ink-soft);font-size:.85rem}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<nav class="topnav">
+  <a href="index.html">⌂ Course home</a>
+  <span>›</span>
+  <span class="crumb">Chapter 2 · Amazon Bedrock Deep Dive</span>
+  <span class="next"><a href="chapter-01-genai-services.html">← Ch. 1</a> · <a href="chapter-03-prompt-engineering.html">Ch. 3 →</a></span>
+</nav>
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <svg class="mesh" viewBox="0 0 1200 420" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <line x1="120" y1="80" x2="320" y2="180"/><line x1="320" y1="180" x2="560" y2="90"/>
+    <line x1="560" y1="90" x2="820" y2="200"/><line x1="820" y1="200" x2="1080" y2="100"/>
+    <line x1="200" y1="330" x2="460" y2="260"/><line x1="460" y1="260" x2="740" y2="340"/>
+    <path class="flow" d="M120 80 L320 180 L560 90 L820 200 L1080 100"/>
+    <path class="flow" style="animation-delay:2s" d="M200 330 L460 260 L740 340"/>
+    <circle cx="120" cy="80" r="4"/><circle cx="320" cy="180" r="4"/><circle cx="560" cy="90" r="4"/>
+    <circle cx="820" cy="200" r="4"/><circle cx="1080" cy="100" r="4"/><circle cx="460" cy="260" r="4"/>
+  </svg>
+  <div style="position:relative">
+    <span class="kicker">AWS Generative AI · Chapter 2</span>
+    <h1>Amazon Bedrock Deep Dive: <em>Models &amp; Inference</em></h1>
+    <p>In Chapter 1 you saw <strong>where</strong> Bedrock sits. Now we go inside: how foundation models think in
+       tokens, how your code talks to them, and how to choose the right model at the right price.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ================= 2.1 TOKENS ================= -->
+<section id="tokens">
+  <span class="section-tag">2.1 · The currency of GenAI</span>
+  <h2>Tokens: how models read, write — and bill you</h2>
+  <p class="lede">Foundation models don't see words or sentences. They see <strong>tokens</strong> — small chunks
+  of text, roughly ¾ of a word each in English. Every request you send is measured in tokens
+  <em>in</em>, every response in tokens <em>out</em>. Tokens determine three things at once:
+  <strong>cost</strong>, <strong>latency</strong>, and <strong>how much the model can "hold in mind."</strong></p>
+
+  <div class="panel">
+    <p style="font-size:.92rem;color:var(--ink-soft);margin-bottom:12px">Watch a sentence become tokens:</p>
+    <div class="token-stage" id="tokenStage" aria-label="Animation showing a sentence being split into tokens"></div>
+    <button class="replay" id="tokenReplay">↻ Replay tokenization</button>
+    <p class="anim-caption" style="margin-top:14px">"Migrate our helpdesk app to AWS" → 8 tokens.
+    A 500-page policy manual? Around 250,000 tokens.</p>
+  </div>
+
+  <div class="callout"><b>The context window</b> is the model's working memory — the maximum tokens
+  (prompt + response) it can handle in one exchange. Modern Bedrock models range from ~8K to over 1M tokens.
+  On-prem analogy: it's RAM, not disk. The model "forgets" everything between calls unless <em>you</em> resend it.</div>
+</section>
+
+<!-- ================= 2.2 MODEL CATALOG ================= -->
+<section id="models">
+  <span class="section-tag">2.2 · The model catalog</span>
+  <h2>Choosing a brain: the Bedrock model families</h2>
+  <p class="lede">Bedrock hosts models from Amazon and leading AI companies. You don't need to memorize versions —
+  model names change quarterly. Instead, learn the <strong>families and what each is best at</strong>.</p>
+
+  <div class="grid">
+    <div class="card m-blue">
+      <h4>✨ Amazon Nova</h4>
+      <span class="oneliner">Amazon's flagship family</span>
+      <p>Micro, Lite, Pro, Premier — a ladder from ultra-cheap/fast to deep reasoning. Plus Canvas (images),
+      Reel (video), Sonic (speech).</p>
+      <div class="meter"><i>💰 Best price-performance</i><i>🖼️ Multimodal</i></div>
+    </div>
+    <div class="card m-purple">
+      <h4>🧠 Anthropic Claude</h4>
+      <span class="oneliner">Reasoning &amp; coding powerhouse</span>
+      <p>Consistently top-tier for complex reasoning, long documents, agents, and code. The default choice for
+      demanding enterprise assistants.</p>
+      <div class="meter"><i>🎯 Highest quality</i><i>📄 Long context</i></div>
+    </div>
+    <div class="card m-teal">
+      <h4>🦙 Meta Llama &amp; Mistral</h4>
+      <span class="oneliner">Open-weight workhorses</span>
+      <p>Open-license models with strong general performance — attractive when you want portability or
+      to fine-tune aggressively.</p>
+      <div class="meter"><i>🔓 Open weights</i><i>⚖️ Flexible licensing</i></div>
+    </div>
+    <div class="card m-pink">
+      <h4>🎨 Stability AI &amp; others</h4>
+      <span class="oneliner">Specialist models</span>
+      <p>Stable Diffusion for image generation; Cohere for embeddings and enterprise search; DeepSeek and more
+      arriving via the Bedrock Marketplace.</p>
+      <div class="meter"><i>🖼️ Images</i><i>🔎 Embeddings</i></div>
+    </div>
+    <div class="card m-amber">
+      <h4>🧮 Amazon Titan Embeddings</h4>
+      <span class="oneliner">The RAG enabler</span>
+      <p>Converts text into vectors (lists of numbers) so "similar meaning" becomes "nearby points." The backbone
+      of semantic search — center stage in Chapter 4.</p>
+      <div class="meter"><i>📐 Vectors</i><i>🔎 Semantic search</i></div>
+    </div>
+  </div>
+
+  <div class="callout blue" style="margin-top:22px"><b>Right-sizing rule:</b> start with the <em>smallest</em> model
+  that passes your quality bar, not the biggest one available. A support-ticket classifier doesn't need a
+  frontier reasoning model — that's like provisioning a 128-core server to run DNS. We quantify this in Chapter 10.</div>
+</section>
+
+<!-- ================= 2.3 APIS ================= -->
+<section id="apis">
+  <span class="section-tag">2.3 · Talking to models</span>
+  <h2>The inference APIs: Converse, InvokeModel &amp; streaming</h2>
+  <p class="lede">Your application talks to Bedrock exactly like any other AWS service: an HTTPS API,
+  the AWS SDK, and IAM credentials. No sockets to GPUs, no model servers to patch.</p>
+
+  <div class="panel">
+    <svg class="flow-svg" viewBox="0 0 880 190" role="img" aria-label="Animated request/response flow: app sends prompt to Bedrock endpoint, model thinks, response tokens stream back">
+      <rect class="box" x="20" y="55" width="180" height="82"/>
+      <text class="label" x="110" y="90" text-anchor="middle">Your application</text>
+      <text class="sub" x="110" y="110" text-anchor="middle">AWS SDK (boto3, JS, Java…)</text>
+
+      <rect class="box" x="330" y="55" width="180" height="82"/>
+      <text class="label" x="420" y="84" text-anchor="middle">Bedrock endpoint</text>
+      <text class="sub" x="420" y="103" text-anchor="middle">HTTPS + IAM auth</text>
+      <text class="sub" x="420" y="119" text-anchor="middle">Converse / InvokeModel</text>
+
+      <g class="brain">
+        <rect class="box" x="640" y="55" width="180" height="82"/>
+        <text class="label" x="730" y="90" text-anchor="middle">Foundation model</text>
+        <text class="sub" x="730" y="110" text-anchor="middle">generates token by token</text>
+      </g>
+
+      <line class="wire" x1="205" y1="83" x2="325" y2="83"/>
+      <line class="wire" x1="515" y1="83" x2="635" y2="83"/>
+      <line class="wire" x1="635" y1="112" x2="515" y2="112"/>
+      <line class="wire" x1="325" y1="112" x2="205" y2="112"/>
+
+      <circle class="reqdot" cx="212" cy="83" r="6"/>
+      <circle class="reqdot" style="animation-delay:.5s" cx="522" cy="83" r="6"/>
+      <circle class="resdot" cx="628" cy="112" r="5"/>
+      <circle class="resdot d2" cx="628" cy="112" r="5"/>
+      <circle class="resdot d3" cx="318" cy="112" r="5"/>
+      <circle class="resdot d4" cx="318" cy="112" r="5"/>
+
+      <text class="sub" x="265" y="70" text-anchor="middle">prompt →</text>
+      <text class="sub" x="265" y="132" text-anchor="middle">← streamed tokens</text>
+    </svg>
+    <p class="anim-caption">Request goes in as one call; the response can <em>stream back token by token</em> —
+    that's why AI chat interfaces "type."</p>
+  </div>
+
+  <h3 style="margin:18px 0 8px;font-size:1.1rem">The three calls you'll actually use</h3>
+  <ul class="param-list" style="background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:8px 22px;box-shadow:var(--shadow)">
+    <li><b><code>Converse</code></b><span>The modern, <em>model-agnostic</em> chat API. Same request shape for every model —
+      swap Claude for Nova by changing one string. Use this by default.</span></li>
+    <li><b><code>ConverseStream</code></b><span>Same as Converse, but the response arrives incrementally.
+      Essential for chat UX: users see the first words in ~1 second instead of waiting 20.</span></li>
+    <li><b><code>InvokeModel</code></b><span>The lower-level API using each model's native JSON format.
+      Needed for embeddings, image generation, and model-specific features.</span></li>
+  </ul>
+
+  <div class="codeblock"><pre><span class="c"># Python: one conversation, any model — just change model_id</span>
+<span class="k">import</span> boto3
+
+bedrock = boto3.client(<span class="s">"bedrock-runtime"</span>, region_name=<span class="s">"us-east-1"</span>)
+
+response = bedrock.converse(
+    modelId=<span class="s">"amazon.nova-lite-v1:0"</span>,          <span class="c"># ← swap models here</span>
+    messages=[{
+        <span class="s">"role"</span>: <span class="s">"user"</span>,
+        <span class="s">"content"</span>: [{<span class="s">"text"</span>: <span class="s">"Summarize this incident ticket: ..."</span>}]
+    }],
+    inferenceConfig={<span class="s">"maxTokens"</span>: 500, <span class="s">"temperature"</span>: 0.2}
+)
+
+print(response[<span class="s">"output"</span>][<span class="s">"message"</span>][<span class="s">"content"</span>][0][<span class="s">"text"</span>])</pre></div>
+
+  <div class="callout"><b>Migration lens:</b> to your architecture, a Bedrock call is just another downstream
+  HTTPS dependency — like calling a payment gateway. Same patterns apply: timeouts, retries with exponential
+  backoff, and least-privilege IAM (<code>bedrock:InvokeModel</code> on specific model ARNs).</div>
+</section>
+
+<!-- ================= 2.4 PARAMETERS ================= -->
+<section id="params">
+  <span class="section-tag">2.4 · The control knobs</span>
+  <h2>Inference parameters: tuning creativity vs. consistency</h2>
+  <p class="lede">Models pick each next token from a probability distribution. Inference parameters reshape
+  that distribution. One picture explains 90% of it:</p>
+
+  <div class="panel params">
+    <div>
+      <div class="temp-toggle">
+        <button id="btnLow" class="active">Temperature 0.1 — factual</button>
+        <button id="btnHigh">Temperature 0.9 — creative</button>
+      </div>
+      <div class="bars" id="probBars" aria-label="Animated bar chart of next-token probabilities changing with temperature">
+        <div class="bar" style="height:78%"><span>"restart"</span></div>
+        <div class="bar" style="height:12%"><span>"reboot"</span></div>
+        <div class="bar" style="height:6%"><span>"cycle"</span></div>
+        <div class="bar" style="height:3%"><span>"bounce"</span></div>
+        <div class="bar" style="height:1%"><span>"unicorn"</span></div>
+      </div>
+      <p class="bar-note">Next-token probabilities for "First, ___ the server." Low temperature concentrates
+      probability on the safest token; high temperature flattens the curve so unlikely tokens get picked sometimes.</p>
+    </div>
+    <div>
+      <ul class="param-list">
+        <li><b>temperature</b><span>0 = deterministic and repeatable; 1 = varied and creative.
+          Use ≤0.3 for support, summaries, and anything factual.</span></li>
+        <li><b>topP</b><span>Only sample from tokens covering the top P% of probability.
+          An alternative dial to temperature — tune one, not both.</span></li>
+        <li><b>topK</b><span>Only consider the K most likely tokens (model-specific).</span></li>
+        <li><b>maxTokens</b><span>Hard cap on response length — your primary cost and latency guard.</span></li>
+        <li><b>stopSequences</b><span>Strings that halt generation, e.g. stop at <code>&lt;/answer&gt;</code>.</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout blue"><b>Ops takeaway:</b> treat parameters as configuration, not code. Store them in
+  AWS AppConfig or Parameter Store so you can tune model behavior in production without a redeploy.</div>
+</section>
+
+<!-- ================= 2.5 PRICING ================= -->
+<section id="pricing">
+  <span class="section-tag">2.5 · Paying for inference</span>
+  <h2>Three ways to buy: on-demand, provisioned, batch</h2>
+  <p class="lede">Bedrock has no servers to reserve — you buy <strong>token throughput</strong>. Three purchasing
+  models cover almost every workload. (Cross-region inference, next, stretches capacity further.)</p>
+
+  <div class="pricing">
+    <div class="price-card">
+      <div class="price-viz"><div class="drip"></div><div class="drip"></div><div class="drip"></div></div>
+      <h4>On-Demand</h4>
+      <span class="tagline">Pay per token</span>
+      <p>No commitment; billed per 1,000 input/output tokens. The default for almost everything —
+      like Lambda pricing, but for intelligence.</p>
+    </div>
+    <div class="price-card">
+      <div class="price-viz"><div class="pipe"></div></div>
+      <h4>Provisioned Throughput</h4>
+      <span class="tagline">Reserved capacity</span>
+      <p>Buy guaranteed model units by the hour or with 1–6 month terms. For sustained, high-volume,
+      latency-sensitive workloads — like Reserved Instances.</p>
+    </div>
+    <div class="price-card">
+      <div class="price-viz"><div class="crate"></div><div class="crate"></div><div class="crate"></div><div class="crate"></div></div>
+      <h4>Batch Inference</h4>
+      <span class="tagline">~50% cheaper, async</span>
+      <p>Drop a file of prompts in S3, get results back later at roughly half price. Perfect for nightly
+      jobs: summarize every ticket, classify every document.</p>
+    </div>
+  </div>
+
+  <div class="callout" style="margin-top:22px"><b>Rule of thumb:</b> start on-demand → move steady 24/7 traffic
+  to provisioned → push everything that isn't interactive to batch. Nightly document processing on
+  on-demand pricing is the classic money leak.</div>
+</section>
+
+<!-- ================= 2.6 CROSS-REGION ================= -->
+<section id="resilience">
+  <span class="section-tag">2.6 · Built-in resilience</span>
+  <h2>Cross-region inference: capacity without the pager duty</h2>
+  <p class="lede">GPU capacity is the scarcest resource in the cloud. With <strong>inference profiles</strong>,
+  Bedrock automatically routes your requests across a set of regions — you get higher burst capacity
+  and resilience with a one-line change (use the inference-profile ID as your <code>modelId</code>).</p>
+
+  <div class="panel">
+    <svg class="region-svg" viewBox="0 0 760 210" role="img" aria-label="Animated diagram of requests routing from an app to a primary region, then automatically to a secondary region">
+      <rect class="reg" x="20" y="75" width="150" height="66"/>
+      <text class="rlabel" x="95" y="103" text-anchor="middle">Your app</text>
+      <text class="rsub" x="95" y="121" text-anchor="middle">us-east-1</text>
+
+      <rect class="reg" x="330" y="18" width="160" height="60"/>
+      <text class="rlabel" x="410" y="43" text-anchor="middle">us-east-1 model</text>
+      <text class="rsub" x="410" y="60" text-anchor="middle">primary route</text>
+
+      <rect class="reg" x="330" y="132" width="160" height="60"/>
+      <text class="rlabel" x="410" y="157" text-anchor="middle">us-west-2 model</text>
+      <text class="rsub" x="410" y="174" text-anchor="middle">automatic overflow</text>
+
+      <g class="busy">
+        <rect x="500" y="30" width="86" height="24" rx="12" fill="#fde8e8" stroke="#f3b4b4"/>
+        <text x="543" y="46" text-anchor="middle" font-size="10.5" fill="#b91c1c" font-weight="700">at capacity</text>
+      </g>
+      <rect x="500" y="146" width="96" height="24" rx="12" fill="#e6f7f0" stroke="#a7e3c9"/>
+      <text x="548" y="162" text-anchor="middle" font-size="10.5" fill="#15803d" font-weight="700">serving ✓</text>
+
+      <line x1="175" y1="95" x2="325" y2="50" stroke="#9fb2c8" stroke-width="2" stroke-dasharray="5 6"/>
+      <line x1="175" y1="120" x2="325" y2="160" stroke="#9fb2c8" stroke-width="2" stroke-dasharray="5 6"/>
+
+      <circle class="route" cx="180" cy="98" r="6"/>
+      <circle class="route alt" cx="180" cy="118" r="6"/>
+    </svg>
+    <p class="anim-caption">When the primary region is saturated, requests overflow to a secondary region —
+    no code, no failover runbook.</p>
+  </div>
+
+  <div class="callout blue"><b>On-prem analogy:</b> this is your global load balancer + DR site — except AWS
+  operates it, and "capacity planning" becomes choosing a geography (US, EU, APAC profiles keep data in-boundary).</div>
+</section>
+
+<!-- ================= 2.7 SECURITY BASICS ================= -->
+<section id="security">
+  <span class="section-tag">2.7 · Trust, from day one</span>
+  <h2>What happens to your data?</h2>
+  <p class="lede">The first question every security team asks. The Bedrock answers are refreshingly clean:</p>
+  <div class="grid">
+    <div class="card m-teal">
+      <h4>🔒 Your prompts aren't training data</h4>
+      <p>Bedrock does not use your inputs or outputs to train models, and doesn't share them with model providers.
+      Your data stays your data.</p>
+    </div>
+    <div class="card m-blue">
+      <h4>🔑 IAM &amp; encryption, as usual</h4>
+      <p>Access controlled by IAM policies; data encrypted in transit (TLS) and at rest (KMS).
+      Same governance muscle you use for S3 and RDS.</p>
+    </div>
+    <div class="card m-purple">
+      <h4>🕸️ Private connectivity</h4>
+      <p>VPC endpoints (PrivateLink) keep traffic off the public internet — critical for migrated workloads
+      with strict egress rules.</p>
+    </div>
+    <div class="card m-amber">
+      <h4>📋 Audit trail built in</h4>
+      <p>CloudTrail records every API call; optional model invocation logging captures full prompts and
+      responses to S3/CloudWatch for compliance.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= LAB ================= -->
+<section id="lab">
+  <div class="lab">
+    <h3>🧪 Hands-on lab (free workshop, ~45 min)</h3>
+    <p>1. In the Bedrock console, request model access, then use the <strong>Chat/Text playground</strong> to compare
+    Nova Lite vs. Claude on the same prompt at temperature 0.1 and 0.9.</p>
+    <p>2. Run the Python <code>Converse</code> example above against two different <code>modelId</code>s — notice the code doesn't change.</p>
+    <p>3. Continue with the official <a href="https://catalog.workshops.aws/building-with-amazon-bedrock/en-US" target="_blank" rel="noopener">Building with Amazon Bedrock workshop</a> (Foundations module).</p>
+  </div>
+</section>
+
+<!-- ================= RECAP ================= -->
+<section id="recap">
+  <div class="recap">
+    <h3>🎯 Chapter 2 takeaways</h3>
+    <ol>
+      <li><b>Tokens</b> are the unit of cost, latency, and memory. The context window is RAM, not disk — stateless between calls.</li>
+      <li>Learn <b>model families</b>, not versions: Nova (price-performance), Claude (reasoning), Llama/Mistral (open), Titan (embeddings).</li>
+      <li>Use the <b>Converse API</b> by default — one request shape, any model, one-string model swaps. Stream for chat UX.</li>
+      <li><b>Temperature</b> shapes the next-token probability curve: low = consistent, high = creative. Treat parameters as config, not code.</li>
+      <li>Buy inference three ways: <b>on-demand</b> (default), <b>provisioned</b> (steady high volume), <b>batch</b> (~50% off async work) — plus cross-region inference for burst capacity.</li>
+      <li>Security fundamentals hold: prompts aren't used for training, IAM + KMS + PrivateLink + CloudTrail all apply.</li>
+    </ol>
+    <div class="nav-btns">
+      <a class="next-btn ghost" href="chapter-01-genai-services.html">← Chapter 1: Service Landscape</a>
+      <a class="next-btn" href="chapter-03-prompt-engineering.html">Next → Chapter 3: Prompt Engineering</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  AWS GenAI for IT Professionals · Chapter 2 of 12 · Model names and pricing evolve — confirm in the
+  <a href="https://docs.aws.amazon.com/bedrock/" target="_blank" rel="noopener">Amazon Bedrock documentation</a>.
+</footer>
+
+<script>
+  // Scroll progress
+  const bar = document.getElementById('progress');
+  addEventListener('scroll', () => {
+    const h = document.documentElement;
+    bar.style.width = (h.scrollTop / (h.scrollHeight - h.clientHeight) * 100) + '%';
+  }, {passive:true});
+
+  // Reveal on scroll
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); } });
+  }, {threshold:.12});
+  document.querySelectorAll('.panel, .card').forEach((el, i) => {
+    el.style.transitionDelay = (i % 5) * 60 + 'ms';
+    io.observe(el);
+  });
+
+  // Tokenizer animation
+  const tokens = ['Mig','rate',' our',' help','desk',' app',' to',' AWS'];
+  const stage = document.getElementById('tokenStage');
+  function playTokens(){
+    stage.innerHTML = '';
+    tokens.forEach((t, i) => {
+      const el = document.createElement('span');
+      el.className = 'tok';
+      el.textContent = t;
+      el.style.animationDelay = (i * 0.28) + 's';
+      stage.appendChild(el);
+    });
+  }
+  playTokens();
+  document.getElementById('tokenReplay').addEventListener('click', playTokens);
+
+  // Temperature bars
+  const low  = [78, 12, 6, 3, 1];
+  const high = [34, 26, 19, 13, 8];
+  const bars = document.querySelectorAll('#probBars .bar');
+  const btnLow = document.getElementById('btnLow'), btnHigh = document.getElementById('btnHigh');
+  function setTemp(vals, hot){
+    bars.forEach((b, i) => { b.style.height = vals[i] + '%'; b.classList.toggle('hot', hot); });
+    btnLow.classList.toggle('active', !hot);
+    btnHigh.classList.toggle('active', hot);
+  }
+  btnLow.addEventListener('click', () => setTemp(low, false));
+  btnHigh.addEventListener('click', () => setTemp(high, true));
+</script>
+</body>
+</html>

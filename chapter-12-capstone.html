@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chapter 12 · Capstone: Migrate &amp; AI-Enable a Real Application</title>
+<style>
+  :root{
+    --ink:#0f1b2d; --ink-soft:#3d4f66; --paper:#f6f8fb; --card:#ffffff;
+    --aws-orange:#ff9900; --aws-orange-dark:#e88b00; --blue:#2074d5; --teal:#0d9488;
+    --purple:#7c3aed; --pink:#db2777; --line:#dde5ef; --radius:16px;
+    --shadow:0 4px 18px rgba(15,27,45,.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    background:var(--paper);color:var(--ink);line-height:1.65}
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;background:#eef2f7;
+    border-radius:5px;padding:1px 6px}
+
+  #progress{position:fixed;top:0;left:0;height:4px;width:0;background:var(--aws-orange);z-index:99}
+
+  .topnav{position:sticky;top:0;z-index:50;background:rgba(15,27,45,.92);backdrop-filter:blur(8px);
+    display:flex;align-items:center;gap:18px;padding:12px 24px;color:#c7d5e5;font-size:.85rem}
+  .topnav a{color:#c7d5e5}
+  .topnav a:hover{color:#fff;text-decoration:none}
+  .topnav .crumb{color:#ffb84d;font-weight:700}
+  .topnav .next{margin-left:auto;color:#7f97b0}
+
+  .hero{position:relative;overflow:hidden;color:#fff;
+    background:linear-gradient(135deg,#0f1b2d 0%,#16324f 55%,#1c4d6b 100%);
+    padding:64px 24px 88px;text-align:center}
+  .hero .kicker{display:inline-block;background:rgba(255,153,0,.15);border:1px solid rgba(255,153,0,.5);
+    color:#ffb84d;border-radius:999px;padding:6px 18px;font-size:.8rem;letter-spacing:.14em;
+    text-transform:uppercase;font-weight:700;margin-bottom:20px}
+  .hero h1{font-size:clamp(1.9rem,4.5vw,3rem);font-weight:800;max-width:880px;margin:0 auto 16px}
+  .hero h1 em{font-style:normal;color:var(--aws-orange)}
+  .hero p{max-width:720px;margin:0 auto;color:#c7d5e5;font-size:1.05rem}
+  .mesh{position:absolute;inset:0;pointer-events:none;opacity:.45}
+  .mesh circle{fill:var(--aws-orange);animation:pulse 3s ease-in-out infinite}
+  .mesh circle:nth-of-type(2n){fill:#4dd0e1;animation-delay:.8s}
+  .mesh line{stroke:#5b7793;stroke-width:1;opacity:.35}
+  .mesh .flow{fill:none;stroke:var(--aws-orange);stroke-width:2;stroke-linecap:round;
+    stroke-dasharray:6 120;animation:dashflow 4s linear infinite;opacity:.9}
+  @keyframes pulse{0%,100%{opacity:.35;r:3}50%{opacity:1;r:5}}
+  @keyframes dashflow{to{stroke-dashoffset:-126}}
+
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  section{padding:60px 0 20px}
+  .section-tag{display:inline-block;font-size:.75rem;font-weight:800;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--aws-orange-dark);margin-bottom:8px}
+  h2{font-size:1.7rem;font-weight:800;margin-bottom:12px}
+  h3{font-size:1.1rem;font-weight:800}
+  .lede{color:var(--ink-soft);max-width:780px;margin-bottom:28px;font-size:1.02rem}
+  .anim-caption{text-align:center;color:var(--ink-soft);font-size:.9rem;margin:6px 0 22px}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:26px;margin-bottom:22px;
+    opacity:0;transform:translateY(20px);transition:opacity .5s ease,transform .5s ease}
+  .panel.visible{opacity:1;transform:none}
+
+  .callout{border-left:6px solid var(--aws-orange);background:#fff8ec;border-radius:12px;
+    padding:16px 20px;margin:20px 0;font-size:.94rem;color:#6b4b0e}
+  .callout b{color:#8a5b00}
+
+  /* ============ SCENARIO ============ */
+  .scenario{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+  .sc-card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:var(--shadow);padding:18px;font-size:.88rem}
+  .sc-card .si{font-size:1.6rem}
+  .sc-card h4{font-size:.95rem;margin:8px 0 4px}
+  .sc-card p{color:var(--ink-soft);font-size:.85rem}
+
+  /* ============ JOURNEY STEPPER ============ */
+  .phases{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}
+  .phase-btn{flex:1 1 130px;border:1px solid var(--line);background:var(--paper);border-radius:12px;
+    padding:10px 8px;font-size:.78rem;font-weight:700;cursor:pointer;color:var(--ink-soft);
+    text-align:center;transition:all .2s ease}
+  .phase-btn small{display:block;font-weight:400;font-size:.68rem;margin-top:2px}
+  .phase-btn:hover{border-color:#b9c8dc}
+  .phase-btn.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .phase-btn.active small{color:#9fb2c8}
+  .jstage{background:#101d31;border-radius:14px;padding:18px}
+  .jstage svg{width:100%;height:auto;display:block}
+  .jstage .nbox{fill:rgba(255,255,255,.06);stroke:rgba(255,255,255,.3);stroke-width:1.4;rx:10;
+    transition:opacity .5s ease}
+  .jstage .nlabel{font-size:11px;font-weight:700;fill:#e6eef7;transition:opacity .5s ease}
+  .jstage .nsub{font-size:8.5px;fill:#7f97b0;transition:opacity .5s ease}
+  .jstage .jwire{stroke:#46617f;stroke-width:1.6;stroke-dasharray:5 6;transition:opacity .5s ease}
+  .jstage .onprem{stroke:#9fb2c8}
+  .jstage .new{stroke:#ffb84d !important}
+  .jstage .new ~ text{fill:#ffd9a0}
+  .jstage g[data-ph]{opacity:0;pointer-events:none}
+  .jstage g[data-ph].on{opacity:1}
+  .jstage g.newest .nbox{stroke:var(--aws-orange);stroke-width:2;
+    animation:newglow 2.2s ease-in-out infinite}
+  @keyframes newglow{0%,100%{stroke-opacity:.55}50%{stroke-opacity:1}}
+  .jstage g.gone{opacity:.18 !important}
+  .jinfo{margin-top:16px;display:grid;grid-template-columns:1.2fr .8fr;gap:18px}
+  @media (max-width:760px){.jinfo{grid-template-columns:1fr}}
+  .jdesc{font-size:.92rem;color:var(--ink-soft)}
+  .jdesc b{color:var(--ink)}
+  .jdesc .win{display:inline-block;margin-top:10px;background:#e8f4f2;color:#0d7264;border:1px solid #bfe3dc;
+    border-radius:999px;padding:4px 14px;font-size:.78rem;font-weight:700}
+  .jchips{display:flex;flex-wrap:wrap;gap:8px;align-content:flex-start}
+  .jchip{background:var(--paper);border:1px solid var(--line);border-radius:999px;
+    padding:5px 14px;font-size:.76rem;font-weight:700;color:var(--purple)}
+
+  /* ============ SKILL MATRIX ============ */
+  .matrix{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:26px}
+  .matrix table{width:100%;border-collapse:collapse;font-size:.88rem}
+  .matrix th{text-align:left;padding:9px 12px;background:var(--paper);border-bottom:2px solid var(--line);
+    font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft)}
+  .matrix td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  .matrix tr:last-child td{border-bottom:none}
+  .matrix td:first-child{font-weight:700;white-space:nowrap}
+  .matrix td a{font-weight:600}
+
+  /* ============ CHECKLIST ============ */
+  .checklist{list-style:none;counter-reset:chk}
+  .checklist li{display:flex;gap:14px;align-items:flex-start;background:var(--card);
+    border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin-bottom:10px;
+    box-shadow:var(--shadow);font-size:.92rem}
+  .checklist li::before{counter-increment:chk;content:counter(chk);flex:0 0 30px;height:30px;
+    border-radius:50%;background:var(--ink);color:#fff;display:flex;align-items:center;
+    justify-content:center;font-weight:800;font-size:.85rem}
+  .checklist b{color:var(--ink)}
+  .checklist span{color:var(--ink-soft)}
+
+  /* ============ NEXT STEPS ============ */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:20px;box-shadow:var(--shadow);position:relative;overflow:hidden;
+    opacity:0;transform:translateY(20px)}
+  .card.visible{opacity:1;transform:none;transition:opacity .5s ease,transform .5s ease,box-shadow .25s ease}
+  .card.visible:hover{transform:translateY(-5px);box-shadow:0 12px 28px rgba(15,27,45,.14)}
+  .card::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;
+    background:linear-gradient(90deg,var(--accent,#ff9900),transparent 80%)}
+  .card h4{font-size:1.02rem;margin-bottom:6px}
+  .card p{font-size:.9rem;color:var(--ink-soft)}
+  .m-blue{--accent:var(--blue)} .m-purple{--accent:var(--purple)} .m-teal{--accent:var(--teal)}
+  .m-amber{--accent:#b45309}
+
+  /* ============ FINALE ============ */
+  .finale{background:linear-gradient(135deg,#0f1b2d,#1c4d6b);color:#fff;border-radius:20px;
+    padding:44px 36px;margin:48px 0 16px;text-align:center;position:relative;overflow:hidden}
+  .finale h3{font-size:1.7rem;margin-bottom:12px}
+  .finale h3 span{color:var(--aws-orange)}
+  .finale p{color:#c7d5e5;max-width:640px;margin:0 auto 10px;font-size:.98rem}
+  .finale .conf{position:absolute;width:9px;height:9px;border-radius:2px;top:-12px;
+    animation:confetti linear infinite}
+  @keyframes confetti{to{transform:translateY(560px) rotate(720deg)}}
+  .nav-btns{display:flex;justify-content:center;gap:14px;margin-top:24px;flex-wrap:wrap;position:relative}
+  .next-btn{display:inline-block;background:var(--aws-orange);color:#0f1b2d;font-weight:800;
+    padding:12px 28px;border-radius:999px;transition:transform .2s ease}
+  .next-btn:hover{transform:translateY(-2px);text-decoration:none}
+  .next-btn.ghost{background:transparent;color:#c7d5e5;border:1px solid #46617f}
+  footer{padding:28px 24px 48px;text-align:center;color:var(--ink-soft);font-size:.85rem}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<nav class="topnav">
+  <a href="index.html">⌂ Course home</a>
+  <span>›</span>
+  <span class="crumb">Chapter 12 · Capstone</span>
+  <span class="next"><a href="chapter-11-monitoring-evaluation.html">← Ch. 11</a> · <a href="chapter-13-capstone-aiops.html">Ch. 13 →</a></span>
+</nav>
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <svg class="mesh" viewBox="0 0 1200 420" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <line x1="120" y1="80" x2="320" y2="180"/><line x1="320" y1="180" x2="560" y2="90"/>
+    <line x1="560" y1="90" x2="820" y2="200"/><line x1="820" y1="200" x2="1080" y2="100"/>
+    <line x1="200" y1="330" x2="460" y2="260"/><line x1="460" y1="260" x2="740" y2="340"/>
+    <path class="flow" d="M120 80 L320 180 L560 90 L820 200 L1080 100"/>
+    <path class="flow" style="animation-delay:2s" d="M200 330 L460 260 L740 340"/>
+    <circle cx="120" cy="80" r="4"/><circle cx="320" cy="180" r="4"/><circle cx="560" cy="90" r="4"/>
+    <circle cx="820" cy="200" r="4"/><circle cx="1080" cy="100" r="4"/><circle cx="460" cy="260" r="4"/>
+  </svg>
+  <div style="position:relative">
+    <span class="kicker">AWS Generative AI · Chapter 12 · Capstone</span>
+    <h1>Migrate &amp; AI-Enable <em>a Real Application</em></h1>
+    <p>Eleven chapters of building blocks become one coherent journey: take AnyCompany's on-prem helpdesk
+       to AWS, then light it up — knowledge base, assistant, agent, guardrails, and operations. Every phase
+       cites the chapter that taught it.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ================= 12.1 SCENARIO ================= -->
+<section id="scenario">
+  <span class="section-tag">12.1 · The starting point</span>
+  <h2>Meet the patient: AnyCompany Helpdesk</h2>
+  <p class="lede">A setup you'll recognize from every enterprise you've worked in:</p>
+  <div class="scenario">
+    <div class="sc-card"><span class="si">🖥️</span><h4>Ticketing app</h4>
+      <p>Java 8 web app on two VMs + Oracle-ish SQL database. 40k tickets/year, growing.</p></div>
+    <div class="sc-card"><span class="si">📁</span><h4>Knowledge file share</h4>
+      <p>900 GB of runbooks, policies, and how-tos on an SMB share. Search = filename guessing.</p></div>
+    <div class="sc-card"><span class="si">☎️</span><h4>Phone &amp; email queue</h4>
+      <p>8 agents; 60% of tickets are repeat questions ("VPN?", "password?", "new laptop?").</p></div>
+    <div class="sc-card"><span class="si">📉</span><h4>The mandate</h4>
+      <p>Data center lease ends in 12 months. Leadership wants "AI" — and lower ticket volume.</p></div>
+  </div>
+</section>
+
+<!-- ================= 12.2 JOURNEY ================= -->
+<section id="journey">
+  <span class="section-tag">12.2 · The journey</span>
+  <h2>Interactive: watch the architecture evolve</h2>
+  <p class="lede"><strong>Click through the six phases.</strong> Orange-glowing boxes are new in that phase;
+  faded boxes are being retired. This is the whole course in one diagram:</p>
+
+  <div class="panel">
+    <div class="phases" id="phaseBtns"></div>
+    <div class="jstage">
+      <svg id="jSvg" viewBox="0 0 900 330">
+        <!-- ON-PREM (phase 0) -->
+        <g data-ph="0" id="g-onprem">
+          <rect class="nbox onprem" x="20" y="30" width="150" height="56"/>
+          <text class="nlabel" x="95" y="53" text-anchor="middle">Java 8 app · VMs</text>
+          <text class="nsub" x="95" y="70" text-anchor="middle">on-prem DC</text>
+          <rect class="nbox onprem" x="20" y="110" width="150" height="56"/>
+          <text class="nlabel" x="95" y="133" text-anchor="middle">SQL database</text>
+          <text class="nsub" x="95" y="150" text-anchor="middle">on-prem DC</text>
+          <rect class="nbox onprem" x="20" y="190" width="150" height="56"/>
+          <text class="nlabel" x="95" y="213" text-anchor="middle">SMB file share</text>
+          <text class="nsub" x="95" y="230" text-anchor="middle">900 GB of docs</text>
+        </g>
+        <!-- PHASE 1: lift & shift -->
+        <g data-ph="1" id="g-ecs">
+          <rect class="nbox" x="230" y="30" width="150" height="56"/>
+          <text class="nlabel" x="305" y="53" text-anchor="middle">App on ECS Fargate</text>
+          <text class="nsub" x="305" y="70" text-anchor="middle">containerized · ALB</text>
+        </g>
+        <g data-ph="1" id="g-rds">
+          <rect class="nbox" x="230" y="110" width="150" height="56"/>
+          <text class="nlabel" x="305" y="133" text-anchor="middle">Aurora PostgreSQL</text>
+          <text class="nsub" x="305" y="150" text-anchor="middle">managed · Multi-AZ</text>
+        </g>
+        <g data-ph="1" id="g-s3">
+          <rect class="nbox" x="230" y="190" width="150" height="56"/>
+          <text class="nlabel" x="305" y="213" text-anchor="middle">Docs in Amazon S3</text>
+          <text class="nsub" x="305" y="230" text-anchor="middle">the migration dividend</text>
+        </g>
+        <!-- PHASE 2: instant wins -->
+        <g data-ph="2" id="g-qbiz">
+          <rect class="nbox" x="230" y="266" width="150" height="52"/>
+          <text class="nlabel" x="305" y="287" text-anchor="middle">Amazon Q Business</text>
+          <text class="nsub" x="305" y="303" text-anchor="middle">agents search the docs</text>
+          <line class="jwire" x1="305" y1="262" x2="305" y2="250"/>
+        </g>
+        <!-- PHASE 3: RAG -->
+        <g data-ph="3" id="g-kb">
+          <rect class="nbox" x="440" y="190" width="160" height="56"/>
+          <text class="nlabel" x="520" y="213" text-anchor="middle">Bedrock Knowledge Base</text>
+          <text class="nsub" x="520" y="230" text-anchor="middle">OpenSearch vectors</text>
+          <line class="jwire" x1="384" y1="218" x2="436" y2="218"/>
+        </g>
+        <g data-ph="3" id="g-chat">
+          <rect class="nbox" x="440" y="110" width="160" height="56"/>
+          <text class="nlabel" x="520" y="133" text-anchor="middle">Self-service chat</text>
+          <text class="nsub" x="520" y="150" text-anchle="middle" text-anchor="middle">API GW · Lambda · Converse</text>
+          <line class="jwire" x1="520" y1="170" x2="520" y2="186"/>
+          <line class="jwire" x1="384" y1="58 " x2="436" y2="130"/>
+        </g>
+        <!-- PHASE 4: agent -->
+        <g data-ph="4" id="g-agent">
+          <rect class="nbox" x="440" y="30" width="160" height="56"/>
+          <text class="nlabel" x="520" y="53" text-anchor="middle">Triage agent</text>
+          <text class="nsub" x="520" y="70" text-anchor="middle">classify · route · act (HITL)</text>
+          <line class="jwire" x1="520" y1="90" x2="520" y2="106"/>
+        </g>
+        <!-- PHASE 5: guardrails/security -->
+        <g data-ph="5" id="g-guard">
+          <rect class="nbox" x="660" y="110" width="150" height="56"/>
+          <text class="nlabel" x="735" y="133" text-anchor="middle">Guardrails + IAM</text>
+          <text class="nsub" x="735" y="150" text-anchor="middle">PII mask · VPC endpoint</text>
+          <line class="jwire" x1="604" y1="138" x2="656" y2="138"/>
+        </g>
+        <!-- PHASE 6: ops -->
+        <g data-ph="6" id="g-ops">
+          <rect class="nbox" x="660" y="190" width="150" height="56"/>
+          <text class="nlabel" x="735" y="213" text-anchor="middle">Eval + cost + alarms</text>
+          <text class="nsub" x="735" y="230" text-anchor="middle">golden set · dashboards</text>
+          <line class="jwire" x1="604" y1="218" x2="656" y2="218"/>
+        </g>
+      </svg>
+    </div>
+    <div class="jinfo">
+      <div class="jdesc" id="jDesc"></div>
+      <div class="jchips" id="jChips"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 12.3 BUILD CHECKLIST ================= -->
+<section id="build">
+  <span class="section-tag">12.3 · Your build</span>
+  <h2>The capstone checklist</h2>
+  <p class="lede">If you did the labs, you've already built most of this. Assemble it end to end —
+  in your own account, with sample data standing in for AnyCompany's:</p>
+  <ol class="checklist">
+    <li><div><b>Land the data (Phase 1).</b><span> Sample "runbooks" and "policies" into S3; a small ticket table
+      in Aurora or DynamoDB. Tag everything for cost allocation (Ch. 10).</span></div></li>
+    <li><div><b>Instant win (Phase 2).</b><span> Q Business over the S3 docs with Identity Center — verify
+      permission-aware answers with two test users (Ch. 7).</span></div></li>
+    <li><div><b>Self-service RAG (Phase 3).</b><span> Knowledge Base + <code>RetrieveAndGenerate</code> behind
+      API Gateway/Lambda with streaming, conversation history in DynamoDB (Ch. 4, 8).</span></div></li>
+    <li><div><b>Triage agent (Phase 4).</b><span> Bedrock Agent or Strands: classify the ticket, query the KB,
+      call a <code>create_ticket</code> Lambda tool; human approval before any write (Ch. 5).</span></div></li>
+    <li><div><b>Harden (Phase 5).</b><span> Guardrail (topics + PII masking + grounding) attached everywhere,
+      model-scoped IAM, guardrail-mandatory deny condition, VPC endpoint, invocation logging (Ch. 6, 9).</span></div></li>
+    <li><div><b>Operate (Phase 6).</b><span> Golden test set in a Bedrock Evaluation job, quality dashboard,
+      p95 TTFT + token + intervention alarms, cost review against your Ch. 10 model.</span></div></li>
+    <li><div><b>Tell the story.</b><span> One architecture diagram + three numbers (deflection rate, cost per
+      conversation, time-to-answer). That's the deck that funds the next one.</span></div></li>
+  </ol>
+</section>
+
+<!-- ================= 12.4 SKILL MATRIX ================= -->
+<section id="matrix">
+  <span class="section-tag">12.4 · What you now know</span>
+  <h2>The course, mapped to the skills</h2>
+  <div class="matrix">
+    <table>
+      <thead><tr><th>Chapter</th><th>You can now…</th></tr></thead>
+      <tbody>
+        <tr><td><a href="chapter-01-genai-services.html">1 · Landscape</a></td>
+            <td>Place any AWS GenAI service in the 4-layer stack and pick the right tool per job</td></tr>
+        <tr><td><a href="chapter-02-bedrock-deep-dive.html">2 · Bedrock</a></td>
+            <td>Explain tokens and context windows; invoke any model through Converse; choose pricing modes</td></tr>
+        <tr><td><a href="chapter-03-prompt-engineering.html">3 · Prompts</a></td>
+            <td>Write six-block production prompts, apply the five techniques, version them like code</td></tr>
+        <tr><td><a href="chapter-04-rag-knowledge-bases.html">4 · RAG</a></td>
+            <td>Build grounded, cited Q&amp;A over your own documents; tune chunking, hybrid search, and reranking</td></tr>
+        <tr><td><a href="chapter-05-agents-agentic-ai.html">5 · Agents</a></td>
+            <td>Build tool-using agents (Bedrock Agents / Strands / MCP) with safety brakes and traces</td></tr>
+        <tr><td><a href="chapter-06-guardrails-responsible-ai.html">6 · Guardrails</a></td>
+            <td>Configure content/PII/topic/injection filters and grounding checks; run a responsible AI program</td></tr>
+        <tr><td><a href="chapter-07-amazon-q.html">7 · Amazon Q</a></td>
+            <td>Deploy permission-aware Q Business and put Q Developer to work on legacy modernization</td></tr>
+        <tr><td><a href="chapter-08-genai-app-patterns.html">8 · Patterns</a></td>
+            <td>Choose among six integration patterns; build resilient, IaC-managed GenAI services</td></tr>
+        <tr><td><a href="chapter-09-security-privacy-governance.html">9 · Security</a></td>
+            <td>Scope IAM by model, enforce guardrails by policy, keep traffic private, own the audit story</td></tr>
+        <tr><td><a href="chapter-10-cost-performance.html">10 · Cost</a></td>
+            <td>Model token economics, right-size and cascade models, cache, and allocate spend per app</td></tr>
+        <tr><td><a href="chapter-11-monitoring-evaluation.html">11 · Operations</a></td>
+            <td>Measure quality as a golden signal, run LLM-as-a-judge evaluations, triage GenAI failures</td></tr>
+        <tr><td>12 · Capstone</td>
+            <td>Sequence all of it into a migration + AI-enablement program that leadership can fund</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ================= 12.5 NEXT ================= -->
+<section id="next">
+  <span class="section-tag">12.5 · Where to go next</span>
+  <h2>Keep the momentum</h2>
+  <div class="grid">
+    <div class="card m-blue">
+      <h4>🎓 Get certified</h4>
+      <p>Foundational: <a href="https://aws.amazon.com/certification/certified-ai-practitioner/" target="_blank" rel="noopener">AWS Certified AI Practitioner</a>.
+      Advanced: <a href="https://aws.amazon.com/certification/certified-generative-ai-developer-professional/" target="_blank" rel="noopener">AWS Certified Generative AI Developer – Professional</a> —
+      this course maps closely to its domains.</p>
+    </div>
+    <div class="card m-teal">
+      <h4>🧪 Keep building</h4>
+      <p><a href="https://catalog.workshops.aws/building-with-amazon-bedrock/en-US" target="_blank" rel="noopener">Building with Amazon Bedrock workshop</a> ·
+      <a href="https://github.com/aws-samples/amazon-bedrock-workshop" target="_blank" rel="noopener">Bedrock workshop notebooks</a> ·
+      <a href="https://serverlessland.com/patterns?services=bedrock" target="_blank" rel="noopener">Serverless Land patterns</a>.</p>
+    </div>
+    <div class="card m-purple">
+      <h4>📰 Stay current</h4>
+      <p>The landscape shifts monthly: <a href="https://aws.amazon.com/blogs/machine-learning/" target="_blank" rel="noopener">AWS ML Blog</a> ·
+      <a href="https://aws.amazon.com/about-aws/whats-new/machine-learning/" target="_blank" rel="noopener">What's New in ML</a> ·
+      re:Invent session recordings on YouTube.</p>
+    </div>
+    <div class="card m-amber">
+      <h4>🏢 Bring it to work</h4>
+      <p>Start with the Phase 2 instant win — a Q Business pilot over already-migrated documents. Small, visible,
+      permission-safe. Then let this capstone be your roadmap.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FINALE ================= -->
+<section id="finale">
+  <div class="finale" id="finaleBox">
+    <h3>🎉 Course complete. <span>You're the AI person now.</span></h3>
+    <p>Twelve chapters ago, "add AI to it" was a scary sentence. Now it's a checklist: land the data, buy the
+       quick win, build the RAG, add the agent, wrap it in guardrails, run it like you run everything else.</p>
+    <p><strong>Migration made your apps run in the cloud. You just learned how to make them think there.</strong></p>
+    <div class="nav-btns">
+      <a class="next-btn ghost" href="chapter-11-monitoring-evaluation.html">← Chapter 11</a>
+      <a class="next-btn" href="chapter-13-capstone-aiops.html">One more challenge → Capstone II: AIOps</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  AWS GenAI for IT Professionals · Chapter 12 of 13 · Thank you for learning with us — service capabilities
+  evolve, so keep the <a href="https://docs.aws.amazon.com/bedrock/" target="_blank" rel="noopener">official docs</a> close.
+</footer>
+
+<script>
+  // Scroll progress
+  const bar = document.getElementById('progress');
+  addEventListener('scroll', () => {
+    const h = document.documentElement;
+    bar.style.width = (h.scrollTop / (h.scrollHeight - h.clientHeight) * 100) + '%';
+  }, {passive:true});
+
+  // Reveal on scroll
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); } });
+  }, {threshold:.12});
+  document.querySelectorAll('.panel, .card').forEach((el, i) => {
+    el.style.transitionDelay = (i % 5) * 60 + 'ms';
+    io.observe(el);
+  });
+
+  // ---------- Journey stepper ----------
+  const phases = [
+    {btn:'Phase 0', sub:'On-prem today', show:['0'], newest:[], gone:[],
+     desc:'<b>The before picture.</b> Two VMs, a database, a file share, and a phone queue. Nothing wrong with it — except the lease, the search experience, and 60% repeat tickets.',
+     win:'Baseline metrics captured: ticket volume, handle time, satisfaction',
+     chips:['Assess & inventory','Baseline metrics']},
+    {btn:'Phase 1', sub:'Lift & shift', show:['0','1'], newest:['g-ecs','g-rds','g-s3'], gone:['g-onprem'],
+     desc:'<b>The migration you already know how to do.</b> App containerized to ECS Fargate, database to Aurora, and — the quiet hero — 900 GB of documents to S3. Q Developer\'s /transform agent handles the Java 8 → 17 upgrade along the way.',
+     win:'Instant win available: Q Developer modernizes the legacy code',
+     chips:['Ch. 7 · Q Developer /transform','Ch. 1 · the stack']},
+    {btn:'Phase 2', sub:'Buy the quick win', show:['0','1','2'], newest:['g-qbiz'], gone:['g-onprem'],
+     desc:'<b>Weeks, not months.</b> Q Business indexes the S3 docs with ACLs intact; support agents stop guessing filenames and start asking questions. Zero code written.',
+     win:'Agent handle time drops — the "cloud made us smarter" moment',
+     chips:['Ch. 7 · Q Business','Ch. 7 · permission-aware answers']},
+    {btn:'Phase 3', sub:'Build self-service', show:['0','1','2','3'], newest:['g-kb','g-chat'], gone:['g-onprem'],
+     desc:'<b>Now employees help themselves.</b> A Knowledge Base over the same S3 docs powers a streaming chat in the helpdesk portal — grounded answers with citations, conversation history in DynamoDB, "answer only from the excerpts" prompting.',
+     win:'Target: deflect 30–40% of repeat tickets before they\'re filed',
+     chips:['Ch. 4 · RAG & KB','Ch. 3 · prompts','Ch. 8 · streaming pattern','Ch. 2 · Converse']},
+    {btn:'Phase 4', sub:'Add the agent', show:['0','1','2','3','4'], newest:['g-agent'], gone:['g-onprem'],
+     desc:'<b>From answering to acting.</b> A triage agent classifies incoming tickets, checks the KB for policy, and files/routes/updates tickets via a Lambda tool — with human approval gating anything irreversible.',
+     win:'Tier-1 triage automated; humans keep the judgment calls',
+     chips:['Ch. 5 · agents & tools','Ch. 5 · human-in-the-loop','Ch. 8 · Step Functions']},
+    {btn:'Phase 5', sub:'Harden', show:['0','1','2','3','4','5'], newest:['g-guard'], gone:['g-onprem'],
+     desc:'<b>Before real users, real controls.</b> One guardrail (denied topics, PII masking, grounding checks) attached to chat and agent; model-scoped IAM with the guardrail-mandatory deny condition; PrivateLink endpoint; invocation logging to a CMK-encrypted bucket.',
+     win:'Security sign-off achieved — the launch blocker removed',
+     chips:['Ch. 6 · guardrails','Ch. 9 · IAM & PrivateLink','Ch. 9 · audit logs']},
+    {btn:'Phase 6', sub:'Operate & optimize', show:['0','1','2','3','4','5','6'], newest:['g-ops'], gone:['g-onprem'],
+     desc:'<b>Run it like production, because it is.</b> Golden test set gates every prompt change; quality dashboard with sampled LLM-judging; cost per conversation tracked via inference profiles; model right-sized after four weeks of data (spoiler: the small tier passes).',
+     win:'Steady state: quality ≥95% grounded, cost per conversation known and falling',
+     chips:['Ch. 11 · eval & triage','Ch. 10 · cost levers','Ch. 11 · golden set flywheel']}
+  ];
+  const phaseBtns = document.getElementById('phaseBtns');
+  const jDesc = document.getElementById('jDesc'), jChips = document.getElementById('jChips');
+  phases.forEach((p, i) => {
+    const b = document.createElement('button');
+    b.className = 'phase-btn' + (i === 0 ? ' active' : '');
+    b.innerHTML = p.btn + '<small>' + p.sub + '</small>';
+    b.addEventListener('click', () => setPhase(i));
+    phaseBtns.appendChild(b);
+  });
+  function setPhase(i){
+    const p = phases[i];
+    document.querySelectorAll('#jSvg g[data-ph]').forEach(g => {
+      const ph = g.dataset.ph;
+      const on = p.show.includes(ph);
+      g.classList.toggle('on', on);
+      g.classList.toggle('newest', p.newest.includes(g.id));
+      g.classList.toggle('gone', on && p.gone.includes(g.id) && i >= 1);
+    });
+    jDesc.innerHTML = p.desc + '<br><span class="win">🏆 ' + p.win + '</span>';
+    jChips.innerHTML = p.chips.map(c => `<span class="jchip">${c}</span>`).join('');
+    [...phaseBtns.children].forEach((b, k) => b.classList.toggle('active', k === i));
+  }
+  setPhase(0);
+
+  // ---------- Confetti in finale ----------
+  const finale = document.getElementById('finaleBox');
+  const colors = ['#ff9900','#4dd0e1','#b388ff','#7ee0c2','#f48fb1'];
+  const finIo = new IntersectionObserver(es => {
+    es.forEach(e => {
+      if (e.isIntersecting){
+        for (let i = 0; i < 26; i++){
+          const c = document.createElement('span');
+          c.className = 'conf';
+          c.style.left = Math.random() * 100 + '%';
+          c.style.background = colors[i % colors.length];
+          c.style.animationDuration = (2.5 + Math.random() * 3) + 's';
+          c.style.animationDelay = Math.random() * 2 + 's';
+          finale.appendChild(c);
+        }
+        finIo.unobserve(finale);
+      }
+    });
+  }, {threshold:.4});
+  finIo.observe(finale);
+</script>
+</body>
+</html>

@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chapter 4 · RAG &amp; Knowledge Bases: Chat with Your Data</title>
+<style>
+  :root{
+    --ink:#0f1b2d; --ink-soft:#3d4f66; --paper:#f6f8fb; --card:#ffffff;
+    --aws-orange:#ff9900; --aws-orange-dark:#e88b00; --blue:#2074d5; --teal:#0d9488;
+    --purple:#7c3aed; --pink:#db2777; --line:#dde5ef; --radius:16px;
+    --shadow:0 4px 18px rgba(15,27,45,.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    background:var(--paper);color:var(--ink);line-height:1.65}
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;background:#eef2f7;
+    border-radius:5px;padding:1px 6px}
+
+  #progress{position:fixed;top:0;left:0;height:4px;width:0;background:var(--aws-orange);z-index:99}
+
+  .topnav{position:sticky;top:0;z-index:50;background:rgba(15,27,45,.92);backdrop-filter:blur(8px);
+    display:flex;align-items:center;gap:18px;padding:12px 24px;color:#c7d5e5;font-size:.85rem}
+  .topnav a{color:#c7d5e5}
+  .topnav a:hover{color:#fff;text-decoration:none}
+  .topnav .crumb{color:#ffb84d;font-weight:700}
+  .topnav .next{margin-left:auto;color:#7f97b0}
+
+  /* ============ HERO ============ */
+  .hero{position:relative;overflow:hidden;color:#fff;
+    background:linear-gradient(135deg,#0f1b2d 0%,#16324f 55%,#1c4d6b 100%);
+    padding:64px 24px 88px;text-align:center}
+  .hero .kicker{display:inline-block;background:rgba(255,153,0,.15);border:1px solid rgba(255,153,0,.5);
+    color:#ffb84d;border-radius:999px;padding:6px 18px;font-size:.8rem;letter-spacing:.14em;
+    text-transform:uppercase;font-weight:700;margin-bottom:20px}
+  .hero h1{font-size:clamp(1.9rem,4.5vw,3rem);font-weight:800;max-width:860px;margin:0 auto 16px}
+  .hero h1 em{font-style:normal;color:var(--aws-orange)}
+  .hero p{max-width:700px;margin:0 auto;color:#c7d5e5;font-size:1.05rem}
+  .mesh{position:absolute;inset:0;pointer-events:none;opacity:.45}
+  .mesh circle{fill:var(--aws-orange);animation:pulse 3s ease-in-out infinite}
+  .mesh circle:nth-of-type(2n){fill:#4dd0e1;animation-delay:.8s}
+  .mesh line{stroke:#5b7793;stroke-width:1;opacity:.35}
+  .mesh .flow{fill:none;stroke:var(--aws-orange);stroke-width:2;stroke-linecap:round;
+    stroke-dasharray:6 120;animation:dashflow 4s linear infinite;opacity:.9}
+  @keyframes pulse{0%,100%{opacity:.35;r:3}50%{opacity:1;r:5}}
+  @keyframes dashflow{to{stroke-dashoffset:-126}}
+
+  /* ============ LAYOUT ============ */
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  section{padding:60px 0 20px}
+  .section-tag{display:inline-block;font-size:.75rem;font-weight:800;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--aws-orange-dark);margin-bottom:8px}
+  h2{font-size:1.7rem;font-weight:800;margin-bottom:12px}
+  h3{font-size:1.1rem;font-weight:800}
+  .lede{color:var(--ink-soft);max-width:780px;margin-bottom:28px;font-size:1.02rem}
+  .anim-caption{text-align:center;color:var(--ink-soft);font-size:.9rem;margin:6px 0 22px}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:26px;margin-bottom:22px;
+    opacity:0;transform:translateY(20px);transition:opacity .5s ease,transform .5s ease}
+  .panel.visible{opacity:1;transform:none}
+
+  .callout{border-left:6px solid var(--aws-orange);background:#fff8ec;border-radius:12px;
+    padding:16px 20px;margin:20px 0;font-size:.94rem;color:#6b4b0e}
+  .callout b{color:#8a5b00}
+  .callout.blue{border-color:var(--blue);background:#eef5fd;color:#1d4c7c}
+  .callout.blue b{color:#164a80}
+
+  /* ============ WITH/WITHOUT RAG TOGGLE ============ */
+  .ragtoggle{display:flex;gap:8px;margin-bottom:16px}
+  .ragtoggle button{border:1px solid var(--line);background:var(--paper);border-radius:999px;
+    padding:8px 20px;font-size:.85rem;font-weight:700;cursor:pointer;color:var(--ink-soft)}
+  .ragtoggle button.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .chatpair{display:grid;grid-template-columns:1fr;gap:12px}
+  .bubble{border-radius:14px;padding:14px 18px;font-size:.92rem;max-width:640px}
+  .bubble.q{background:#e8eef7;color:var(--ink);align-self:flex-start}
+  .bubble.a{background:#101d31;color:#d7e3f0;align-self:flex-end;justify-self:end;white-space:pre-line}
+  .bubble.a .src{display:inline-block;margin-top:10px;background:rgba(126,224,194,.15);
+    border:1px solid rgba(126,224,194,.4);color:#7ee0c2;border-radius:999px;padding:3px 12px;font-size:.75rem}
+  .bubble.a .warn{display:inline-block;margin-top:10px;background:rgba(244,143,177,.15);
+    border:1px solid rgba(244,143,177,.4);color:#f48fb1;border-radius:999px;padding:3px 12px;font-size:.75rem}
+
+  /* ============ EMBEDDING SPACE (interactive) ============ */
+  .space-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:24px;align-items:start}
+  @media (max-width:820px){.space-grid{grid-template-columns:1fr}}
+  .space-svg{width:100%;height:auto;background:#101d31;border-radius:14px}
+  .space-svg .pt{cursor:pointer}
+  .space-svg .pt circle{transition:r .25s ease, fill .25s ease}
+  .space-svg .pt text{font-size:10.5px;fill:#9fb2c8;pointer-events:none}
+  .space-svg .pt.query circle{fill:var(--aws-orange)}
+  .space-svg .pt.query text{fill:#ffb84d;font-weight:700}
+  .space-svg .pt.near circle{fill:#7ee0c2}
+  .space-svg .pt.near text{fill:#7ee0c2}
+  .space-svg .link{stroke:#7ee0c2;stroke-width:1.5;stroke-dasharray:4 4;opacity:0;transition:opacity .3s ease}
+  .space-svg .link.show{opacity:.8;animation:dashmove 1.2s linear infinite}
+  @keyframes dashmove{to{stroke-dashoffset:-16}}
+  .space-help{font-size:.88rem;color:var(--ink-soft)}
+  .space-help b{color:var(--ink)}
+  .qbtns{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+  .qbtn{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:12px 16px;
+    text-align:left;font-size:.88rem;cursor:pointer;transition:border-color .2s ease, background .2s ease}
+  .qbtn:hover{border-color:#b9c8dc}
+  .qbtn.active{background:#fff5e5;border-color:var(--aws-orange)}
+  .qbtn b{display:block;font-size:.82rem;color:var(--aws-orange-dark)}
+
+  /* ============ RAG PIPELINE ANIM ============ */
+  .pipe-svg{width:100%;height:auto;display:block;margin:0 auto}
+  .pipe-svg .box{fill:#fff;stroke:var(--line);stroke-width:1.5;rx:12;filter:drop-shadow(0 3px 8px rgba(15,27,45,.10))}
+  .pipe-svg .label{font-size:12.5px;font-weight:700;fill:var(--ink)}
+  .pipe-svg .sub{font-size:10px;fill:var(--ink-soft)}
+  .pipe-svg .wire{stroke:#9fb2c8;stroke-width:2;stroke-dasharray:5 6}
+  .pipe-svg .phase{font-size:11px;font-weight:800;letter-spacing:.1em}
+  .pipe-svg .doc{fill:var(--purple);animation:ing 6s linear infinite}
+  .pipe-svg .doc.d2{animation-delay:.4s}.pipe-svg .doc.d3{animation-delay:.8s}
+  @keyframes ing{
+    0%{transform:translate(0,0);opacity:0}3%{opacity:1}
+    22%{transform:translate(168px,0);opacity:1}26%{opacity:0}
+    28%{transform:translate(168px,0);opacity:0}30%{opacity:1}
+    48%{transform:translate(336px,0);opacity:1}52%{opacity:0}100%{opacity:0}
+  }
+  .pipe-svg .qdot{fill:var(--blue);animation:qflow 6s linear infinite}
+  @keyframes qflow{
+    0%,8%{transform:translate(0,0);opacity:0}12%{opacity:1}
+    28%{transform:translate(168px,0);opacity:1}
+    34%{transform:translate(168px,0);opacity:1}
+    52%{transform:translate(336px,0);opacity:1}56%{opacity:0}100%{opacity:0}
+  }
+  .pipe-svg .adot{fill:var(--teal);animation:aflow 6s linear infinite}
+  @keyframes aflow{
+    0%,56%{transform:translate(0,0);opacity:0}60%{opacity:1}
+    82%{transform:translate(168px,0);opacity:1}
+    96%{transform:translate(168px,0);opacity:1}100%{opacity:0}
+  }
+  .pipe-svg .vault{animation:vaultglow 3s ease-in-out infinite}
+  @keyframes vaultglow{0%,100%{stroke-opacity:.5}50%{stroke-opacity:1}}
+
+  /* ============ CHUNKING (interactive) ============ */
+  .chunk-toggle{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+  .chunk-toggle button{border:1px solid var(--line);background:var(--paper);border-radius:999px;
+    padding:7px 18px;font-size:.83rem;font-weight:700;cursor:pointer;color:var(--ink-soft)}
+  .chunk-toggle button.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .chunkdoc{display:flex;flex-wrap:wrap;gap:6px;background:#101d31;border-radius:14px;padding:18px;min-height:120px}
+  .chk{border-radius:8px;padding:7px 11px;font-family:"SF Mono",Menlo,monospace;font-size:.74rem;
+    color:#fff;opacity:0;transform:scale(.92);animation:chkin .4s ease forwards}
+  @keyframes chkin{to{opacity:1;transform:none}}
+  .chk.c1{background:#2074d5}.chk.c2{background:#7c3aed}.chk.c3{background:#0d9488}
+  .chk.c4{background:#db2777}.chk.c5{background:#b45309}
+  .chunk-note{font-size:.88rem;color:var(--ink-soft);margin-top:12px}
+
+  /* ============ CARDS ============ */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:20px;box-shadow:var(--shadow);position:relative;overflow:hidden;
+    opacity:0;transform:translateY(20px)}
+  .card.visible{opacity:1;transform:none;transition:opacity .5s ease,transform .5s ease,box-shadow .25s ease}
+  .card.visible:hover{transform:translateY(-5px);box-shadow:0 12px 28px rgba(15,27,45,.14)}
+  .card::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;
+    background:linear-gradient(90deg,var(--accent,#ff9900),transparent 80%)}
+  .card h4{font-size:1.02rem;margin-bottom:6px}
+  .card p{font-size:.9rem;color:var(--ink-soft)}
+  .card .oneliner{display:block;font-size:.78rem;font-weight:700;color:var(--accent,var(--aws-orange-dark));
+    text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+  .card .use{margin-top:12px;font-size:.8rem;background:var(--paper);border-radius:10px;padding:9px 12px;
+    border:1px dashed var(--line);color:var(--ink-soft)}
+  .card .use b{color:var(--ink)}
+  .m-blue{--accent:var(--blue)} .m-purple{--accent:var(--purple)} .m-teal{--accent:var(--teal)}
+  .m-pink{--accent:var(--pink)} .m-amber{--accent:#b45309} .m-sky{--accent:#0369a1}
+
+  /* ============ CODE ============ */
+  .codeblock{background:#101d31;border-radius:14px;padding:20px 22px;overflow-x:auto;margin:14px 0}
+  .codeblock pre{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.82rem;line-height:1.6;color:#d7e3f0}
+  .codeblock .c{color:#7f97b0}.codeblock .k{color:#ffb84d}.codeblock .s{color:#7ee0c2}
+
+  /* ============ ANTIPATTERNS ============ */
+  .anti{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--line);border-radius:14px;
+    overflow:hidden;font-size:.88rem}
+  @media (max-width:700px){.anti{grid-template-columns:1fr}}
+  .anti > div{padding:14px 18px;border-bottom:1px solid var(--line)}
+  .anti .bad{background:#fdf1f1;color:#7c2d2d}
+  .anti .good{background:#f0f9f4;color:#1c5c3c}
+  .anti .bad::before{content:"✗ ";font-weight:800;color:#b91c1c}
+  .anti .good::before{content:"✓ ";font-weight:800;color:#15803d}
+  .anti > div:nth-last-child(-n+2){border-bottom:none}
+
+  /* ============ LAB / RECAP ============ */
+  .lab{background:linear-gradient(135deg,#0d3b34,#0d9488);color:#fff;border-radius:20px;padding:30px;margin:26px 0}
+  .lab h3{font-size:1.25rem;margin-bottom:10px}
+  .lab p{color:#cdeee8;font-size:.95rem;margin-bottom:8px}
+  .lab a{color:#aef3e2;font-weight:700}
+  .recap{background:#0f1b2d;color:#fff;border-radius:20px;padding:34px;margin:48px 0 16px}
+  .recap h3{font-size:1.3rem;margin-bottom:14px}
+  .recap ol{margin-left:22px;color:#c7d5e5}
+  .recap li{margin-bottom:8px}
+  .recap b{color:#ffb84d}
+  .nav-btns{display:flex;justify-content:space-between;gap:14px;margin-top:22px;flex-wrap:wrap}
+  .next-btn{display:inline-block;background:var(--aws-orange);color:#0f1b2d;font-weight:800;
+    padding:12px 28px;border-radius:999px;transition:transform .2s ease}
+  .next-btn:hover{transform:translateY(-2px);text-decoration:none}
+  .next-btn.ghost{background:transparent;color:#c7d5e5;border:1px solid #46617f}
+  footer{padding:28px 24px 48px;text-align:center;color:var(--ink-soft);font-size:.85rem}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<nav class="topnav">
+  <a href="index.html">⌂ Course home</a>
+  <span>›</span>
+  <span class="crumb">Chapter 4 · RAG &amp; Knowledge Bases</span>
+  <span class="next"><a href="chapter-03-prompt-engineering.html">← Ch. 3</a> · <a href="chapter-05-agents-agentic-ai.html">Ch. 5 →</a></span>
+</nav>
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <svg class="mesh" viewBox="0 0 1200 420" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <line x1="120" y1="80" x2="320" y2="180"/><line x1="320" y1="180" x2="560" y2="90"/>
+    <line x1="560" y1="90" x2="820" y2="200"/><line x1="820" y1="200" x2="1080" y2="100"/>
+    <line x1="200" y1="330" x2="460" y2="260"/><line x1="460" y1="260" x2="740" y2="340"/>
+    <path class="flow" d="M120 80 L320 180 L560 90 L820 200 L1080 100"/>
+    <path class="flow" style="animation-delay:2s" d="M200 330 L460 260 L740 340"/>
+    <circle cx="120" cy="80" r="4"/><circle cx="320" cy="180" r="4"/><circle cx="560" cy="90" r="4"/>
+    <circle cx="820" cy="200" r="4"/><circle cx="1080" cy="100" r="4"/><circle cx="460" cy="260" r="4"/>
+  </svg>
+  <div style="position:relative">
+    <span class="kicker">AWS Generative AI · Chapter 4</span>
+    <h1>RAG &amp; Knowledge Bases: <em>Chat with Your Data</em></h1>
+    <p>Foundation models know the internet — they don't know your runbooks, contracts, or wiki.
+       Retrieval-Augmented Generation fixes that without training anything. This is the #1 GenAI
+       pattern you'll build after migrating to AWS.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ================= 4.1 THE PROBLEM ================= -->
+<section id="problem">
+  <span class="section-tag">4.1 · The problem</span>
+  <h2>Smart model, amnesiac employee</h2>
+  <p class="lede">A foundation model is like a brilliant new hire on day one: deeply knowledgeable in general,
+  but it has never seen <em>your</em> VPN policy, <em>your</em> outage runbook, or <em>your</em> pricing sheet —
+  and its knowledge stops at its training cutoff. Ask anyway, and it may <strong>hallucinate</strong>:
+  answer confidently and wrongly. Toggle below to see the difference RAG makes.</p>
+
+  <div class="panel">
+    <div class="ragtoggle">
+      <button id="btnNoRag" class="active">Without RAG</button>
+      <button id="btnRag">With RAG</button>
+    </div>
+    <div class="chatpair">
+      <div class="bubble q">💬 "What's our policy for granting contractors VPN access?"</div>
+      <div class="bubble a" id="ragAnswer"></div>
+    </div>
+  </div>
+
+  <div class="callout"><b>Why not just fine-tune?</b> Training a model on your documents is slow, expensive,
+  hard to update ("un-teaching" a stale policy is nearly impossible), and can't do per-user permissions.
+  RAG keeps knowledge in a database you already know how to operate: update a document, and the next answer
+  reflects it — like editing a config file instead of recompiling the kernel.</div>
+</section>
+
+<!-- ================= 4.2 EMBEDDINGS ================= -->
+<section id="embeddings">
+  <span class="section-tag">4.2 · The enabling trick</span>
+  <h2>Embeddings: a map where meaning is distance</h2>
+  <p class="lede">An <strong>embedding model</strong> (like Amazon Titan Embeddings, Chapter 2) converts any text
+  into a vector — a point in a high-dimensional space — where <strong>texts with similar meaning land close
+  together</strong>, even if they share no keywords. That's the trick that lets a search for "laptop won't turn on"
+  find a document titled "notebook power failure remediation."</p>
+
+  <div class="panel space-grid">
+    <svg class="space-svg" id="spaceSvg" viewBox="0 0 520 340" role="img" aria-label="Interactive map of documents as points in embedding space; selecting a query highlights its nearest neighbors">
+      <text x="14" y="24" font-size="11" fill="#7f97b0" font-weight="700">EMBEDDING SPACE (2-D view of 1,024 dimensions)</text>
+      <line class="link" id="lk0" x1="0" y1="0" x2="0" y2="0"/>
+      <line class="link" id="lk1" x1="0" y1="0" x2="0" y2="0"/>
+    </svg>
+    <div>
+      <p class="space-help"><b>Try it:</b> pick a user question. Watch it land in the space and connect to its
+      <b>nearest neighbors</b> — the chunks a RAG system would retrieve. Notice: no keyword overlap needed.</p>
+      <div class="qbtns">
+        <button class="qbtn active" data-q="0"><b>Query A</b>"My laptop won't switch on"</button>
+        <button class="qbtn" data-q="1"><b>Query B</b>"How do I reset my password?"</button>
+        <button class="qbtn" data-q="2"><b>Query C</b>"Server disk is almost full"</button>
+      </div>
+      <p class="space-help" style="margin-top:14px">On-prem analogy: like full-text search upgraded from
+      <code>grep</code> to a librarian who understands what you <em>mean</em>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 4.3 PIPELINE ================= -->
+<section id="pipeline">
+  <span class="section-tag">4.3 · The architecture</span>
+  <h2>The RAG pipeline: two loops, one vector store</h2>
+  <p class="lede">Every RAG system — hand-built or managed — is the same two data flows.
+  The <strong>ingestion loop</strong> (purple) runs when documents change; the <strong>query loop</strong>
+  (blue in, teal out) runs on every user question.</p>
+
+  <div class="panel">
+    <svg class="pipe-svg" viewBox="0 0 900 330" role="img" aria-label="Animated RAG pipeline: documents are chunked, embedded and stored; queries retrieve chunks which augment the prompt sent to the model">
+      <!-- ingestion row -->
+      <text class="phase" x="20" y="30" fill="#7c3aed">INGESTION (when documents change)</text>
+      <rect class="box" x="20" y="45" width="150" height="64"/>
+      <text class="label" x="95" y="72" text-anchor="middle">Documents in S3</text>
+      <text class="sub" x="95" y="90" text-anchor="middle">wikis · PDFs · tickets</text>
+      <rect class="box" x="188" y="45" width="150" height="64"/>
+      <text class="label" x="263" y="72" text-anchor="middle">Chunk &amp; embed</text>
+      <text class="sub" x="263" y="90" text-anchor="middle">Titan Embeddings</text>
+      <line class="wire" x1="172" y1="77" x2="185" y2="77"/>
+      <line class="wire" x1="340" y1="77" x2="356" y2="77"/>
+      <circle class="doc" cx="178" cy="77" r="6"/>
+      <circle class="doc d2" cx="178" cy="77" r="6"/>
+      <circle class="doc d3" cx="178" cy="77" r="6"/>
+
+      <!-- vector store -->
+      <rect class="box vault" x="360" y="45" width="150" height="240" stroke="#ff9900" stroke-width="2.5"/>
+      <text class="label" x="435" y="80" text-anchor="middle">Vector store</text>
+      <text class="sub" x="435" y="98" text-anchor="middle">OpenSearch · pgvector</text>
+      <text x="435" y="150" text-anchor="middle" font-size="22">🗄️</text>
+      <text class="sub" x="435" y="185" text-anchor="middle">chunks + vectors</text>
+      <text class="sub" x="435" y="202" text-anchor="middle">+ metadata</text>
+
+      <!-- query row -->
+      <text class="phase" x="20" y="215" fill="#2074d5">QUERY (every user question)</text>
+      <rect class="box" x="20" y="228" width="150" height="64"/>
+      <text class="label" x="95" y="255" text-anchor="middle">User question</text>
+      <text class="sub" x="95" y="273" text-anchor="middle">embedded the same way</text>
+      <rect class="box" x="188" y="228" width="150" height="64"/>
+      <text class="label" x="263" y="250" text-anchor="middle">Retrieve top-K</text>
+      <text class="sub" x="263" y="268" text-anchor="middle">nearest chunks</text>
+      <text class="sub" x="263" y="283" text-anchor="middle">semantic search</text>
+      <line class="wire" x1="172" y1="260" x2="185" y2="260"/>
+      <line class="wire" x1="340" y1="260" x2="356" y2="260"/>
+      <circle class="qdot" cx="178" cy="260" r="6"/>
+
+      <!-- augmented prompt to model -->
+      <rect class="box" x="548" y="120" width="160" height="90"/>
+      <text class="label" x="628" y="148" text-anchor="middle">Augmented prompt</text>
+      <text class="sub" x="628" y="167" text-anchor="middle">"Answer using ONLY</text>
+      <text class="sub" x="628" y="182" text-anchor="middle">these excerpts: …"</text>
+      <rect class="box" x="726" y="120" width="150" height="90"/>
+      <text class="label" x="801" y="153" text-anchor="middle">Foundation model</text>
+      <text class="sub" x="801" y="172" text-anchor="middle">grounded answer</text>
+      <text class="sub" x="801" y="188" text-anchor="middle">+ citations</text>
+      <line class="wire" x1="512" y1="165" x2="544" y2="165"/>
+      <line class="wire" x1="710" y1="165" x2="722" y2="165"/>
+      <circle class="adot" cx="518" cy="165" r="6"/>
+      <circle class="adot" style="animation-delay:.35s" cx="518" cy="165" r="6"/>
+    </svg>
+    <p class="anim-caption">The model never "learns" your data — it reads relevant excerpts at question time,
+    like an open-book exam.</p>
+  </div>
+</section>
+
+<!-- ================= 4.4 CHUNKING ================= -->
+<section id="chunking">
+  <span class="section-tag">4.4 · The detail that makes or breaks RAG</span>
+  <h2>Chunking: how you slice the documents</h2>
+  <p class="lede">Whole documents are too big to embed meaningfully; single sentences lose context.
+  You must split ("chunk") documents — and the strategy you choose is the <strong>most common root cause of
+  bad RAG answers</strong>. Compare the strategies on a sample runbook:</p>
+
+  <div class="panel">
+    <div class="chunk-toggle">
+      <button class="active" data-s="fixed">Fixed-size</button>
+      <button data-s="semantic">Semantic</button>
+      <button data-s="hier">Hierarchical</button>
+    </div>
+    <div class="chunkdoc" id="chunkDoc"></div>
+    <p class="chunk-note" id="chunkNote"></p>
+  </div>
+
+  <div class="callout blue"><b>Rules of thumb:</b> start with the default (~300 token chunks, 10–20% overlap);
+  use semantic or hierarchical chunking for structured docs (runbooks, policies, contracts); and always keep
+  <b>overlap</b> so answers spanning a boundary aren't cut in half. Bedrock Knowledge Bases supports all three
+  natively — plus custom chunking via Lambda.</div>
+</section>
+
+<!-- ================= 4.5 VECTOR STORES ================= -->
+<section id="stores">
+  <span class="section-tag">4.5 · Where vectors live</span>
+  <h2>Choosing a vector store on AWS</h2>
+  <p class="lede">From Chapter 1's data layer — now with selection guidance. All of these plug into
+  Bedrock Knowledge Bases.</p>
+  <div class="grid">
+    <div class="card m-sky">
+      <h4>🧭 OpenSearch Serverless</h4>
+      <span class="oneliner">The default choice</span>
+      <p>Purpose-built vector engine, scales automatically, supports hybrid (keyword + vector) search.
+      What Knowledge Bases provisions if you click "quick create."</p>
+      <div class="use"><b>Pick when:</b> you have no strong reason to pick anything else.</div>
+    </div>
+    <div class="card m-blue">
+      <h4>🐘 Aurora PostgreSQL + pgvector</h4>
+      <span class="oneliner">Vectors in your RDBMS</span>
+      <p>Add a vector column next to your relational data. One database, one backup story, familiar SQL.</p>
+      <div class="use"><b>Pick when:</b> you're already migrating a PostgreSQL app — join vectors with business data.</div>
+    </div>
+    <div class="card m-amber">
+      <h4>🪣 S3 Vectors</h4>
+      <span class="oneliner">Cheapest at scale</span>
+      <p>Vector storage directly in S3 — dramatically lower cost for large, less latency-sensitive collections.</p>
+      <div class="use"><b>Pick when:</b> huge archives, batch analytics, or budget-driven designs.</div>
+    </div>
+    <div class="card m-purple">
+      <h4>🔎 Amazon Kendra</h4>
+      <span class="oneliner">Managed retriever</span>
+      <p>Enterprise search with 40+ data connectors and built-in relevance tuning — skip embedding management entirely.</p>
+      <div class="use"><b>Pick when:</b> your data lives in SharePoint/Confluence/Salesforce and you want connectors, not pipelines.</div>
+    </div>
+    <div class="card m-pink">
+      <h4>⚡ MemoryDB &amp; Neptune</h4>
+      <span class="oneliner">Specialists</span>
+      <p>MemoryDB for single-digit-millisecond vector lookups; Neptune Analytics for GraphRAG — combining
+      knowledge graphs with vectors.</p>
+      <div class="use"><b>Pick when:</b> extreme latency needs, or relationship-heavy questions ("who approved what?").</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 4.6 KNOWLEDGE BASES ================= -->
+<section id="kb">
+  <span class="section-tag">4.6 · The managed path</span>
+  <h2>Bedrock Knowledge Bases: RAG without the plumbing</h2>
+  <p class="lede">Everything in section 4.3 — chunking, embedding, vector storage, retrieval, prompt augmentation,
+  citations — as one managed service. Point it at S3 (or Confluence, SharePoint, Salesforce…), pick an embedding
+  model, and query it with two APIs:</p>
+
+  <ul class="grid" style="list-style:none">
+    <li class="card m-teal"><h4><code>Retrieve</code></h4>
+      <span class="oneliner">Just the search</span>
+      <p>Returns the top-K matching chunks with scores and source URIs. You build the prompt yourself —
+      maximum control.</p></li>
+    <li class="card m-blue"><h4><code>RetrieveAndGenerate</code></h4>
+      <span class="oneliner">The whole loop</span>
+      <p>Retrieves, augments, calls the model, and returns a grounded answer <em>with citations</em>. One API call
+      for the entire RAG pattern.</p></li>
+  </ul>
+
+  <div class="codeblock"><pre><span class="c"># Full RAG in one call — retrieval, grounding, citations included</span>
+agent = boto3.client(<span class="s">"bedrock-agent-runtime"</span>, region_name=<span class="s">"us-east-1"</span>)
+
+resp = agent.retrieve_and_generate(
+    input={<span class="s">"text"</span>: <span class="s">"What's our policy for contractor VPN access?"</span>},
+    retrieveAndGenerateConfiguration={
+        <span class="s">"type"</span>: <span class="s">"KNOWLEDGE_BASE"</span>,
+        <span class="s">"knowledgeBaseConfiguration"</span>: {
+            <span class="s">"knowledgeBaseId"</span>: <span class="s">"KB123EXAMPLE"</span>,
+            <span class="s">"modelArn"</span>: <span class="s">"arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-lite-v1:0"</span>
+        }
+    }
+)
+print(resp[<span class="s">"output"</span>][<span class="s">"text"</span>])          <span class="c"># grounded answer</span>
+print(resp[<span class="s">"citations"</span>])                <span class="c"># which chunks, from which documents</span></pre></div>
+
+  <div class="callout"><b>Migration lens:</b> the ingestion loop is just an ETL job — S3 events trigger re-sync
+  when documents change, exactly like your old file-share indexer. Citations matter operationally: they turn
+  "trust me" into "see section 4.2 of the security policy," which is what gets security and audit teams to sign off.</div>
+</section>
+
+<!-- ================= 4.7 QUALITY ================= -->
+<section id="quality">
+  <span class="section-tag">4.7 · Making retrieval good</span>
+  <h2>Retrieval quality: the 20% that takes 80% of the effort</h2>
+  <div class="grid" style="margin-bottom:22px">
+    <div class="card m-blue"><h4>🔀 Hybrid search</h4>
+      <p>Combine keyword and vector search. Vectors catch meaning; keywords catch exact terms like error codes,
+      SKUs, and hostnames that embeddings blur.</p></div>
+    <div class="card m-teal"><h4>🏷️ Metadata filtering</h4>
+      <p>Tag chunks (department, date, doc-type) and filter before searching: "only HR policies, only current
+      versions." Also your permission boundary.</p></div>
+    <div class="card m-purple"><h4>🥇 Reranking</h4>
+      <p>A second, smarter model re-orders the top-50 hits so the truly best 5 reach the prompt.
+      Bedrock offers managed reranker models.</p></div>
+  </div>
+
+  <div class="panel" style="padding:0;overflow:hidden">
+    <div class="anti">
+      <div class="bad">Answers cite the right doc but miss the point</div>
+      <div class="good">Chunks too small — increase size/overlap, or use hierarchical chunking</div>
+      <div class="bad">Model answers from general knowledge, ignoring your docs</div>
+      <div class="good">Tighten the prompt: "Answer ONLY from the excerpts; otherwise say you don't know"</div>
+      <div class="bad">Exact terms (error codes, part numbers) aren't found</div>
+      <div class="good">Enable hybrid search — pure vector search blurs identifiers</div>
+      <div class="bad">Stale answers after documents are updated</div>
+      <div class="good">Automate sync: S3 event → Knowledge Base ingestion job, not manual refresh</div>
+      <div class="bad">Users see answers from documents they shouldn't access</div>
+      <div class="good">Metadata filters per user/group at query time — retrieval is your ACL enforcement point</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= LAB ================= -->
+<section id="lab">
+  <div class="lab">
+    <h3>🧪 Hands-on lab (~60 min)</h3>
+    <p>1. Upload 3–5 internal-style documents (runbooks, FAQs) to an S3 bucket and create a
+    <strong>Bedrock Knowledge Base</strong> with the quick-create OpenSearch Serverless option.</p>
+    <p>2. In the console's <strong>Test</strong> panel, ask questions with and without "retrieval only" mode —
+    inspect which chunks return, then re-sync after editing a document.</p>
+    <p>3. Call <code>RetrieveAndGenerate</code> from Python (code above) and print the citations.</p>
+    <p>4. Go deeper with the <a href="https://catalog.workshops.aws/building-with-amazon-bedrock/en-US" target="_blank" rel="noopener">Building with Amazon Bedrock workshop</a> (RAG modules) or the
+    <a href="https://github.com/aws-samples/amazon-bedrock-workshop" target="_blank" rel="noopener">Bedrock workshop notebooks</a>.</p>
+  </div>
+</section>
+
+<!-- ================= RECAP ================= -->
+<section id="recap">
+  <div class="recap">
+    <h3>🎯 Chapter 4 takeaways</h3>
+    <ol>
+      <li>Models don't know your data; <b>RAG</b> fixes that at question time — an open-book exam, not retraining.</li>
+      <li><b>Embeddings</b> turn text into points where similar meaning = nearby. That's why "laptop won't turn on" finds "notebook power failure."</li>
+      <li>Every RAG system is <b>two loops</b>: ingestion (chunk → embed → store) and query (retrieve → augment → generate).</li>
+      <li><b>Chunking strategy</b> is the #1 root cause of bad answers — start ~300 tokens with overlap, tune from there.</li>
+      <li>Vector store choice: <b>OpenSearch Serverless</b> by default, <b>pgvector</b> if you're already on PostgreSQL, <b>S3 Vectors</b> for cheap scale, <b>Kendra</b> for connector-heavy estates.</li>
+      <li><b>Bedrock Knowledge Bases</b> manages the whole pipeline; <code>RetrieveAndGenerate</code> gives grounded, <b>cited</b> answers in one call.</li>
+      <li>Quality levers: <b>hybrid search</b>, <b>metadata filtering</b> (also your ACLs), and <b>reranking</b>.</li>
+    </ol>
+    <div class="nav-btns">
+      <a class="next-btn ghost" href="chapter-03-prompt-engineering.html">← Chapter 3: Prompt Engineering</a>
+      <a class="next-btn" href="chapter-05-agents-agentic-ai.html">Next → Chapter 5: Agents &amp; Agentic AI</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  AWS GenAI for IT Professionals · Chapter 4 of 12 · Verify current capabilities in the
+  <a href="https://docs.aws.amazon.com/bedrock/latest/userguide/knowledge-base.html" target="_blank" rel="noopener">Bedrock Knowledge Bases documentation</a>.
+</footer>
+
+<script>
+  // Scroll progress
+  const bar = document.getElementById('progress');
+  addEventListener('scroll', () => {
+    const h = document.documentElement;
+    bar.style.width = (h.scrollTop / (h.scrollHeight - h.clientHeight) * 100) + '%';
+  }, {passive:true});
+
+  // Reveal on scroll
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); } });
+  }, {threshold:.12});
+  document.querySelectorAll('.panel, .card').forEach((el, i) => {
+    el.style.transitionDelay = (i % 5) * 60 + 'ms';
+    io.observe(el);
+  });
+
+  // ---------- With/Without RAG toggle ----------
+  const ragAnswer = document.getElementById('ragAnswer');
+  const btnNoRag = document.getElementById('btnNoRag'), btnRag = document.getElementById('btnRag');
+  const answers = {
+    no: {html:'🤖 "Typically, organizations grant contractor VPN access through a standard request form, usually valid for 90 days…"<span class="warn">⚠ Hallucinated — your policy is 30 days &amp; requires sponsor approval</span>'},
+    yes:{html:'🤖 "Contractor VPN access requires a sponsoring manager\'s approval and is limited to 30 days per request, renewable once. Requests go through the AnyCompany Access Portal (SEC-VPN-007, section 3.2)."<span class="src">📎 Source: security-policy.pdf › SEC-VPN-007 §3.2</span>'}
+  };
+  function setRag(on){
+    ragAnswer.innerHTML = on ? answers.yes.html : answers.no.html;
+    btnRag.classList.toggle('active', on);
+    btnNoRag.classList.toggle('active', !on);
+  }
+  btnNoRag.addEventListener('click', () => setRag(false));
+  btnRag.addEventListener('click', () => setRag(true));
+  setRag(false);
+
+  // ---------- Embedding space ----------
+  const docs = [
+    {x:120,y:90, t:'notebook power failure', g:0},
+    {x:165,y:130,t:'battery replacement guide', g:0},
+    {x:95, y:150,t:'docking station issues', g:0},
+    {x:330,y:80, t:'password reset runbook', g:1},
+    {x:390,y:115,t:'MFA enrollment steps', g:1},
+    {x:350,y:150,t:'account lockout policy', g:1},
+    {x:180,y:255,t:'disk cleanup procedure', g:2},
+    {x:250,y:285,t:'storage expansion request', g:2},
+    {x:130,y:290,t:'log rotation config', g:2},
+    {x:430,y:250,t:'cafeteria menu', g:9},
+    {x:470,y:190,t:'parking policy', g:9}
+  ];
+  const queries = [
+    {x:140,y:120,t:'“laptop won\'t switch on”', g:0},
+    {x:355,y:110,t:'“reset my password”', g:1},
+    {x:185,y:270,t:'“server disk almost full”', g:2}
+  ];
+  const svg = document.getElementById('spaceSvg');
+  const NS = 'http://www.w3.org/2000/svg';
+  docs.forEach((d,i) => {
+    const g = document.createElementNS(NS,'g');
+    g.setAttribute('class','pt doc-pt');
+    g.dataset.i = i;
+    g.innerHTML = `<circle cx="${d.x}" cy="${d.y}" r="5" fill="#5b7793"/>
+      <text x="${d.x+9}" y="${d.y+4}">${d.t}</text>`;
+    svg.appendChild(g);
+  });
+  const qg = document.createElementNS(NS,'g');
+  qg.setAttribute('class','pt query');
+  qg.innerHTML = `<circle cx="0" cy="0" r="7"/><text x="9" y="4"></text>`;
+  svg.appendChild(qg);
+
+  function setQuery(qi){
+    const q = queries[qi];
+    const c = qg.querySelector('circle'), t = qg.querySelector('text');
+    c.setAttribute('cx',q.x); c.setAttribute('cy',q.y);
+    t.setAttribute('x',q.x+11); t.setAttribute('y',q.y-8);
+    t.textContent = q.t;
+    // nearest neighbors = same group, sorted by distance
+    const pts = [...svg.querySelectorAll('.doc-pt')];
+    const scored = docs.map((d,i)=>({i, d:Math.hypot(d.x-q.x,d.y-q.y), g:d.g}))
+                       .filter(o=>o.g===q.g).sort((a,b)=>a.d-b.d).slice(0,2);
+    pts.forEach(p => p.classList.remove('near'));
+    ['lk0','lk1'].forEach(id => document.getElementById(id).classList.remove('show'));
+    scored.forEach((s,k) => {
+      pts[s.i].classList.add('near');
+      const d = docs[s.i], lk = document.getElementById('lk'+k);
+      lk.setAttribute('x1',q.x); lk.setAttribute('y1',q.y);
+      lk.setAttribute('x2',d.x); lk.setAttribute('y2',d.y);
+      lk.classList.add('show');
+    });
+    document.querySelectorAll('.qbtn').forEach(b =>
+      b.classList.toggle('active', +b.dataset.q === qi));
+  }
+  document.querySelectorAll('.qbtn').forEach(b =>
+    b.addEventListener('click', () => setQuery(+b.dataset.q)));
+  setQuery(0);
+
+  // ---------- Chunking demo ----------
+  const sentences = [
+    'STEP 1: Check power LED.', 'If dark, reseat cable.', 'STEP 2: Hold power 10s.',
+    'Wait for POST beep.', 'STEP 3: If no POST,', 'swap the PSU.', 'Escalate to Tier 3', 'with serial number.'
+  ];
+  const strategies = {
+    fixed: {groups:[[0,1],[2,3],[4,5],[6,7]],
+      note:'Fixed-size: equal chunks, blind to structure. Simple and often good enough — but note STEP 3 and its action can land in different chunks (why overlap matters).'},
+    semantic: {groups:[[0,1],[2,3],[4,5,6,7]],
+      note:'Semantic: splits where the meaning shifts. Each troubleshooting step stays intact — answers stop getting cut in half.'},
+    hier: {groups:[[0,1,2,3,4,5,6,7],[0,1],[2,3],[4,5,6,7]],
+      note:'Hierarchical: small child chunks for precise search, linked to a large parent chunk handed to the model — precision AND context.'}
+  };
+  const chunkDoc = document.getElementById('chunkDoc'), chunkNote = document.getElementById('chunkNote');
+  function renderChunks(s){
+    chunkDoc.innerHTML = '';
+    strategies[s].groups.forEach((g, gi) => {
+      g.forEach((si, k) => {
+        const el = document.createElement('span');
+        el.className = 'chk c' + ((gi % 5) + 1);
+        el.textContent = sentences[si];
+        el.style.animationDelay = (gi * 0.25 + k * 0.08) + 's';
+        chunkDoc.appendChild(el);
+      });
+      if (gi < strategies[s].groups.length - 1) {
+        const gap = document.createElement('span');
+        gap.style.flexBasis = '100%'; gap.style.height = '2px';
+        chunkDoc.appendChild(gap);
+      }
+    });
+    chunkNote.textContent = strategies[s].note;
+    document.querySelectorAll('.chunk-toggle button').forEach(b =>
+      b.classList.toggle('active', b.dataset.s === s));
+  }
+  document.querySelectorAll('.chunk-toggle button').forEach(b =>
+    b.addEventListener('click', () => renderChunks(b.dataset.s)));
+  renderChunks('fixed');
+</script>
+</body>
+</html>

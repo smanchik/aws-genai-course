@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chapter 11 · Monitoring, Evaluation &amp; Troubleshooting GenAI</title>
+<style>
+  :root{
+    --ink:#0f1b2d; --ink-soft:#3d4f66; --paper:#f6f8fb; --card:#ffffff;
+    --aws-orange:#ff9900; --aws-orange-dark:#e88b00; --blue:#2074d5; --teal:#0d9488;
+    --purple:#7c3aed; --pink:#db2777; --line:#dde5ef; --radius:16px;
+    --shadow:0 4px 18px rgba(15,27,45,.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    background:var(--paper);color:var(--ink);line-height:1.65}
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;background:#eef2f7;
+    border-radius:5px;padding:1px 6px}
+
+  #progress{position:fixed;top:0;left:0;height:4px;width:0;background:var(--aws-orange);z-index:99}
+
+  .topnav{position:sticky;top:0;z-index:50;background:rgba(15,27,45,.92);backdrop-filter:blur(8px);
+    display:flex;align-items:center;gap:18px;padding:12px 24px;color:#c7d5e5;font-size:.85rem}
+  .topnav a{color:#c7d5e5}
+  .topnav a:hover{color:#fff;text-decoration:none}
+  .topnav .crumb{color:#ffb84d;font-weight:700}
+  .topnav .next{margin-left:auto;color:#7f97b0}
+
+  .hero{position:relative;overflow:hidden;color:#fff;
+    background:linear-gradient(135deg,#0f1b2d 0%,#16324f 55%,#1c4d6b 100%);
+    padding:64px 24px 88px;text-align:center}
+  .hero .kicker{display:inline-block;background:rgba(255,153,0,.15);border:1px solid rgba(255,153,0,.5);
+    color:#ffb84d;border-radius:999px;padding:6px 18px;font-size:.8rem;letter-spacing:.14em;
+    text-transform:uppercase;font-weight:700;margin-bottom:20px}
+  .hero h1{font-size:clamp(1.9rem,4.5vw,3rem);font-weight:800;max-width:860px;margin:0 auto 16px}
+  .hero h1 em{font-style:normal;color:var(--aws-orange)}
+  .hero p{max-width:700px;margin:0 auto;color:#c7d5e5;font-size:1.05rem}
+  .mesh{position:absolute;inset:0;pointer-events:none;opacity:.45}
+  .mesh circle{fill:var(--aws-orange);animation:pulse 3s ease-in-out infinite}
+  .mesh circle:nth-of-type(2n){fill:#4dd0e1;animation-delay:.8s}
+  .mesh line{stroke:#5b7793;stroke-width:1;opacity:.35}
+  .mesh .flow{fill:none;stroke:var(--aws-orange);stroke-width:2;stroke-linecap:round;
+    stroke-dasharray:6 120;animation:dashflow 4s linear infinite;opacity:.9}
+  @keyframes pulse{0%,100%{opacity:.35;r:3}50%{opacity:1;r:5}}
+  @keyframes dashflow{to{stroke-dashoffset:-126}}
+
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  section{padding:60px 0 20px}
+  .section-tag{display:inline-block;font-size:.75rem;font-weight:800;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--aws-orange-dark);margin-bottom:8px}
+  h2{font-size:1.7rem;font-weight:800;margin-bottom:12px}
+  h3{font-size:1.1rem;font-weight:800}
+  .lede{color:var(--ink-soft);max-width:780px;margin-bottom:28px;font-size:1.02rem}
+  .anim-caption{text-align:center;color:var(--ink-soft);font-size:.9rem;margin:6px 0 22px}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:26px;margin-bottom:22px;
+    opacity:0;transform:translateY(20px);transition:opacity .5s ease,transform .5s ease}
+  .panel.visible{opacity:1;transform:none}
+
+  .callout{border-left:6px solid var(--aws-orange);background:#fff8ec;border-radius:12px;
+    padding:16px 20px;margin:20px 0;font-size:.94rem;color:#6b4b0e}
+  .callout b{color:#8a5b00}
+  .callout.blue{border-color:var(--blue);background:#eef5fd;color:#1d4c7c}
+  .callout.blue b{color:#164a80}
+
+  /* ============ DASHBOARD MOCK ============ */
+  .dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
+  .tile{background:#101d31;border-radius:14px;padding:16px 18px;color:#d7e3f0}
+  .tile .tname{font-size:.68rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#7f97b0}
+  .tile .tval{font-size:1.6rem;font-weight:800;font-family:"SF Mono",Menlo,monospace;margin:4px 0 2px}
+  .tile .tsub{font-size:.72rem;color:#7f97b0}
+  .tile.ok .tval{color:#7ee0c2}
+  .tile.warn .tval{color:#ffb84d}
+  .tile.bad .tval{color:#f48fb1}
+  .tile .spark{display:flex;align-items:flex-end;gap:2px;height:26px;margin-top:8px}
+  .tile .spark i{flex:1;background:#2e4763;border-radius:2px 2px 0 0;animation:sparkgrow 1s ease both}
+  .tile.ok .spark i{background:#1f5c4f}
+  .tile.bad .spark i:last-child,.tile.warn .spark i:last-child{background:#b45309}
+  @keyframes sparkgrow{from{height:0}}
+
+  /* ============ JUDGE DEMO ============ */
+  .judge{display:grid;grid-template-columns:.95fr 1.05fr;gap:24px}
+  @media (max-width:840px){.judge{grid-template-columns:1fr}}
+  .jbtns{display:flex;flex-direction:column;gap:10px}
+  .jbtn{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:12px 16px;
+    text-align:left;font-size:.85rem;cursor:pointer;transition:all .2s ease}
+  .jbtn:hover{border-color:#b9c8dc}
+  .jbtn.active{background:#fff5e5;border-color:var(--aws-orange)}
+  .jbtn b{display:block;font-size:.78rem;color:var(--aws-orange-dark);text-transform:uppercase;letter-spacing:.05em}
+  .jstage{background:#101d31;border-radius:14px;padding:20px;color:#d7e3f0}
+  .jresp{background:rgba(255,255,255,.06);border-radius:10px;padding:12px 15px;font-size:.85rem;margin-bottom:16px}
+  .jresp .lbl{display:block;font-size:.66rem;font-weight:800;letter-spacing:.09em;
+    text-transform:uppercase;color:#7f97b0;margin-bottom:4px}
+  .jrubric{display:flex;flex-direction:column;gap:10px}
+  .jrow{display:grid;grid-template-columns:120px 1fr 44px;gap:12px;align-items:center;font-size:.8rem}
+  .jrow .jname{color:#9fb2c8;font-weight:700}
+  .jtrack{height:12px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}
+  .jfill{height:100%;border-radius:999px;width:0;transition:width .9s cubic-bezier(.4,.9,.4,1)}
+  .jrow .jscore{font-family:"SF Mono",Menlo,monospace;font-weight:800;text-align:right}
+  .jverdict{margin-top:16px;border-radius:10px;padding:11px 14px;font-size:.85rem;border:1px solid transparent}
+  .jverdict.pass{background:rgba(126,224,194,.1);border-color:rgba(126,224,194,.35);color:#7ee0c2}
+  .jverdict.fail{background:rgba(244,143,177,.1);border-color:rgba(244,143,177,.35);color:#f48fb1}
+
+  /* ============ TRIAGE ============ */
+  .triage{display:grid;grid-template-columns:.9fr 1.1fr;gap:24px}
+  @media (max-width:840px){.triage{grid-template-columns:1fr}}
+  .sympt{display:flex;flex-direction:column;gap:10px}
+  .sbtn{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:12px 16px;
+    text-align:left;font-size:.87rem;cursor:pointer;transition:all .2s ease}
+  .sbtn:hover{border-color:#b9c8dc}
+  .sbtn.active{background:#fff5e5;border-color:var(--aws-orange)}
+  .diag{display:flex;flex-direction:column;gap:10px}
+  .dstep{background:var(--paper);border:1px solid var(--line);border-left:4px solid var(--dc,#9fb2c8);
+    border-radius:12px;padding:12px 16px;font-size:.86rem;opacity:0;transform:translateY(8px);
+    animation:dstepin .45s ease forwards}
+  .dstep:nth-child(2){animation-delay:.15s}.dstep:nth-child(3){animation-delay:.3s}
+  .dstep:nth-child(4){animation-delay:.45s}
+  @keyframes dstepin{to{opacity:1;transform:none}}
+  .dstep b{display:block;font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--dc)}
+  .dstep.check{--dc:#2074d5}.dstep.cause{--dc:#b45309}.dstep.fix{--dc:#0d9488}
+  .dstep span{color:var(--ink-soft)}
+  .dstep .ref{font-size:.76rem;color:var(--purple);font-weight:700}
+
+  /* ============ CARDS ============ */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:20px;box-shadow:var(--shadow);position:relative;overflow:hidden;
+    opacity:0;transform:translateY(20px)}
+  .card.visible{opacity:1;transform:none;transition:opacity .5s ease,transform .5s ease,box-shadow .25s ease}
+  .card.visible:hover{transform:translateY(-5px);box-shadow:0 12px 28px rgba(15,27,45,.14)}
+  .card::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;
+    background:linear-gradient(90deg,var(--accent,#ff9900),transparent 80%)}
+  .card h4{font-size:1.02rem;margin-bottom:6px}
+  .card p{font-size:.9rem;color:var(--ink-soft)}
+  .card .use{margin-top:12px;font-size:.8rem;background:var(--paper);border-radius:10px;padding:9px 12px;
+    border:1px dashed var(--line);color:var(--ink-soft)}
+  .card .use b{color:var(--ink)}
+  .m-blue{--accent:var(--blue)} .m-purple{--accent:var(--purple)} .m-teal{--accent:var(--teal)}
+  .m-pink{--accent:var(--pink)} .m-amber{--accent:#b45309}
+
+  .codeblock{background:#101d31;border-radius:14px;padding:20px 22px;overflow-x:auto;margin:14px 0}
+  .codeblock pre{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.82rem;line-height:1.6;color:#d7e3f0}
+  .codeblock .c{color:#7f97b0}.codeblock .k{color:#ffb84d}.codeblock .s{color:#7ee0c2}
+
+  .anti{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--line);border-radius:14px;
+    overflow:hidden;font-size:.88rem}
+  @media (max-width:700px){.anti{grid-template-columns:1fr}}
+  .anti > div{padding:14px 18px;border-bottom:1px solid var(--line)}
+  .anti .bad{background:#fdf1f1;color:#7c2d2d}
+  .anti .good{background:#f0f9f4;color:#1c5c3c}
+  .anti .bad::before{content:"✗ ";font-weight:800;color:#b91c1c}
+  .anti .good::before{content:"✓ ";font-weight:800;color:#15803d}
+  .anti > div:nth-last-child(-n+2){border-bottom:none}
+
+  .lab{background:linear-gradient(135deg,#0d3b34,#0d9488);color:#fff;border-radius:20px;padding:30px;margin:26px 0}
+  .lab h3{font-size:1.25rem;margin-bottom:10px}
+  .lab p{color:#cdeee8;font-size:.95rem;margin-bottom:8px}
+  .lab a{color:#aef3e2;font-weight:700}
+  .recap{background:#0f1b2d;color:#fff;border-radius:20px;padding:34px;margin:48px 0 16px}
+  .recap h3{font-size:1.3rem;margin-bottom:14px}
+  .recap ol{margin-left:22px;color:#c7d5e5}
+  .recap li{margin-bottom:8px}
+  .recap b{color:#ffb84d}
+  .nav-btns{display:flex;justify-content:space-between;gap:14px;margin-top:22px;flex-wrap:wrap}
+  .next-btn{display:inline-block;background:var(--aws-orange);color:#0f1b2d;font-weight:800;
+    padding:12px 28px;border-radius:999px;transition:transform .2s ease}
+  .next-btn:hover{transform:translateY(-2px);text-decoration:none}
+  .next-btn.ghost{background:transparent;color:#c7d5e5;border:1px solid #46617f}
+  footer{padding:28px 24px 48px;text-align:center;color:var(--ink-soft);font-size:.85rem}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<nav class="topnav">
+  <a href="index.html">⌂ Course home</a>
+  <span>›</span>
+  <span class="crumb">Chapter 11 · Monitoring, Evaluation &amp; Troubleshooting</span>
+  <span class="next"><a href="chapter-10-cost-performance.html">← Ch. 10</a> · <a href="chapter-12-capstone.html">Ch. 12 →</a></span>
+</nav>
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <svg class="mesh" viewBox="0 0 1200 420" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <line x1="120" y1="80" x2="320" y2="180"/><line x1="320" y1="180" x2="560" y2="90"/>
+    <line x1="560" y1="90" x2="820" y2="200"/><line x1="820" y1="200" x2="1080" y2="100"/>
+    <line x1="200" y1="330" x2="460" y2="260"/><line x1="460" y1="260" x2="740" y2="340"/>
+    <path class="flow" d="M120 80 L320 180 L560 90 L820 200 L1080 100"/>
+    <path class="flow" style="animation-delay:2s" d="M200 330 L460 260 L740 340"/>
+    <circle cx="120" cy="80" r="4"/><circle cx="320" cy="180" r="4"/><circle cx="560" cy="90" r="4"/>
+    <circle cx="820" cy="200" r="4"/><circle cx="1080" cy="100" r="4"/><circle cx="460" cy="260" r="4"/>
+  </svg>
+  <div style="position:relative">
+    <span class="kicker">AWS Generative AI · Chapter 11</span>
+    <h1>Monitoring, Evaluation &amp; Troubleshooting: <em>Trust but Verify</em></h1>
+    <p>A GenAI app can be up, fast, error-free — and wrong. This chapter adds the missing discipline:
+       measuring <strong>quality</strong> like you've always measured availability, and debugging failures
+       that don't throw exceptions.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ================= 11.1 WHY DIFFERENT ================= -->
+<section id="why">
+  <span class="section-tag">11.1 · The new golden signals</span>
+  <h2>200 OK is not "correct"</h2>
+  <p class="lede">Your classic golden signals (latency, traffic, errors, saturation) still apply — but they all
+  read green while the model confidently tells users the wrong VPN policy. GenAI adds a fifth signal:
+  <strong>quality</strong>. Here's the dashboard shape to aim for:</p>
+
+  <div class="panel dash">
+    <div class="tile ok"><div class="tname">Invocations / hr</div><div class="tval">4,182</div>
+      <div class="tsub">CloudWatch · per inference profile</div>
+      <div class="spark"><i style="height:40%"></i><i style="height:55%"></i><i style="height:48%"></i><i style="height:70%"></i><i style="height:66%"></i><i style="height:78%"></i></div></div>
+    <div class="tile ok"><div class="tname">p95 time-to-first-token</div><div class="tval">1.4s</div>
+      <div class="tsub">the latency users feel (Ch. 10)</div>
+      <div class="spark"><i style="height:60%"></i><i style="height:55%"></i><i style="height:58%"></i><i style="height:52%"></i><i style="height:57%"></i><i style="height:54%"></i></div></div>
+    <div class="tile warn"><div class="tname">Tokens / request (avg)</div><div class="tval">3,910</div>
+      <div class="tsub">creeping up — history window growing?</div>
+      <div class="spark"><i style="height:35%"></i><i style="height:42%"></i><i style="height:50%"></i><i style="height:58%"></i><i style="height:70%"></i><i style="height:85%"></i></div></div>
+    <div class="tile ok"><div class="tname">Guardrail interventions</div><div class="tval">0.8%</div>
+      <div class="tsub">blocks + masks (Ch. 6) · alarm &gt; 3%</div>
+      <div class="spark"><i style="height:30%"></i><i style="height:28%"></i><i style="height:35%"></i><i style="height:26%"></i><i style="height:31%"></i><i style="height:29%"></i></div></div>
+    <div class="tile bad"><div class="tname">Groundedness (sampled)</div><div class="tval">86%</div>
+      <div class="tsub">LLM-judge on 5% sample · target ≥ 95%</div>
+      <div class="spark"><i style="height:88%"></i><i style="height:86%"></i><i style="height:84%"></i><i style="height:80%"></i><i style="height:74%"></i><i style="height:68%"></i></div></div>
+    <div class="tile ok"><div class="tname">👍 rate (user feedback)</div><div class="tval">91%</div>
+      <div class="tsub">thumbs up / (up + down)</div>
+      <div class="spark"><i style="height:80%"></i><i style="height:84%"></i><i style="height:82%"></i><i style="height:86%"></i><i style="height:85%"></i><i style="height:88%"></i></div></div>
+  </div>
+  <p class="anim-caption">The red tile is the story: everything operational is green while answer quality quietly
+  degrades — a re-chunked document source, a drifted prompt, or a model update. Only a quality signal catches it.</p>
+
+  <div class="callout"><b>Migration lens:</b> you've done this before. When you moved apps to AWS you added
+  synthetic checks because "the server is up" stopped meaning "the app works." Same move again: add quality
+  probes because "the API returned 200" doesn't mean "the answer was right."</div>
+</section>
+
+<!-- ================= 11.2 EVALUATION ================= -->
+<section id="eval">
+  <span class="section-tag">11.2 · Offline evaluation</span>
+  <h2>Golden sets and LLM-as-a-judge</h2>
+  <p class="lede">You can't unit-test free text with <code>assertEquals</code>. The GenAI equivalent is a
+  <strong>golden test set</strong> (real questions + reference answers, from Ch. 3) scored by an
+  <strong>LLM judge</strong> — a second model grading each response against a rubric.
+  <strong>Pick a candidate response</strong> and watch the judge score it:</p>
+
+  <div class="panel judge">
+    <div class="jbtns">
+      <button class="jbtn active" data-j="good"><b>Candidate A</b>"Contractor VPN extensions need sponsor approval, max 30 days, renewable once (SEC-VPN-007 §3.2)."</button>
+      <button class="jbtn" data-j="halluc"><b>Candidate B</b>"Contractor VPN access is extended automatically for 90 days when the contract renews."</button>
+      <button class="jbtn" data-j="offtopic"><b>Candidate C</b>"VPNs encrypt your traffic using protocols like WireGuard and IPsec. Fascinating technology!"</button>
+      <p class="anim-caption" style="text-align:left;margin-top:6px">Judge prompt: "Score this answer 1–10 for each
+      criterion against the reference answer and retrieved excerpts. Return JSON."</p>
+    </div>
+    <div class="jstage">
+      <div class="jresp"><span class="lbl">Question</span>"What's the policy for extending contractor VPN access?"</div>
+      <div class="jrubric">
+        <div class="jrow"><span class="jname">Groundedness</span><div class="jtrack"><div class="jfill" id="jf0"></div></div><span class="jscore" id="js0"></span></div>
+        <div class="jrow"><span class="jname">Relevance</span><div class="jtrack"><div class="jfill" id="jf1"></div></div><span class="jscore" id="js1"></span></div>
+        <div class="jrow"><span class="jname">Completeness</span><div class="jtrack"><div class="jfill" id="jf2"></div></div><span class="jscore" id="js2"></span></div>
+        <div class="jrow"><span class="jname">Citation</span><div class="jtrack"><div class="jfill" id="jf3"></div></div><span class="jscore" id="js3"></span></div>
+      </div>
+      <div class="jverdict" id="jVerdict"></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card m-teal">
+      <h4>🧰 Amazon Bedrock Evaluations</h4>
+      <p>The managed version: run automatic metrics, LLM-as-a-judge, or human evaluation jobs over your dataset —
+      including <b>RAG evaluation</b> that scores retrieval and generation separately.</p>
+      <div class="use"><b>Use for:</b> comparing models (Ch. 2 right-sizing!), regression-testing prompt changes.</div>
+    </div>
+    <div class="card m-blue">
+      <h4>🎯 Evaluate retrieval separately</h4>
+      <p>If the right chunks never arrived, the best model can't answer. Score retrieval (did the gold chunk rank
+      top-K?) before scoring generation — it localizes the bug (Ch. 4).</p>
+      <div class="use"><b>Metric names:</b> recall@K, precision@K, MRR — your search team already knows them.</div>
+    </div>
+    <div class="card m-purple">
+      <h4>🚪 Quality gates in CI/CD</h4>
+      <p>From Ch. 8: golden set runs on every prompt/model/chunking change; promotion blocked below threshold.
+      Treat a 3-point groundedness drop like a failing unit test.</p>
+      <div class="use"><b>Keep the set alive:</b> add every production failure as a new test case.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 11.3 ONLINE ================= -->
+<section id="online">
+  <span class="section-tag">11.3 · Online evaluation</span>
+  <h2>Production is the real test set</h2>
+  <div class="grid">
+    <div class="card m-blue">
+      <h4>👍 Feedback capture</h4>
+      <p>Thumbs up/down plus an optional "what was wrong?" — the cheapest quality signal you'll ever get.
+      Store it keyed to the invocation log entry (Ch. 9) so every complaint is replayable.</p>
+    </div>
+    <div class="card m-teal">
+      <h4>🧪 A/B &amp; canary for prompts</h4>
+      <p>Route 5% of traffic to the new prompt/model version; compare feedback rate, groundedness sample, tokens,
+      and latency before full rollout — deployment discipline you already run, applied to prompts.</p>
+    </div>
+    <div class="card m-pink">
+      <h4>📉 Drift detection</h4>
+      <p>Three things drift: <b>user questions</b> (new topics your KB lacks), <b>documents</b> (stale content),
+      and <b>models</b> (provider updates). Watch "I don't know" rates and no-hit retrievals weekly.</p>
+    </div>
+    <div class="card m-amber">
+      <h4>🕵️ Sampled deep review</h4>
+      <p>An LLM judge scores a few percent of live traffic asynchronously (cheap batch job — Ch. 10); humans review
+      the worst-scored conversations weekly. That's your quality flywheel.</p>
+    </div>
+  </div>
+
+  <div class="callout blue"><b>The loop that makes teams good:</b> production failure → replay from invocation
+  logs → diagnose (next section) → fix → add to golden set → gate future releases. After six months, your golden
+  set is your moat.</div>
+</section>
+
+<!-- ================= 11.4 TRIAGE ================= -->
+<section id="triage">
+  <span class="section-tag">11.4 · Troubleshooting</span>
+  <h2>Interactive: symptom → diagnosis → fix</h2>
+  <p class="lede">GenAI failures rarely throw exceptions — they mis-answer. <strong>Pick the symptom</strong>
+  you're seeing; the diagnostic path lights up with the chapter that covers each fix:</p>
+
+  <div class="panel triage">
+    <div class="sympt">
+      <button class="sbtn active" data-s="0">"The answers are just… wrong"</button>
+      <button class="sbtn" data-s="1">"It answers from general knowledge, ignoring our documents"</button>
+      <button class="sbtn" data-s="2">"Responses randomly break our JSON parser"</button>
+      <button class="sbtn" data-s="3">"Long conversations go off the rails"</button>
+      <button class="sbtn" data-s="4">"We're getting throttled at peak hours"</button>
+      <button class="sbtn" data-s="5">"Quality dropped last week and nothing changed"</button>
+    </div>
+    <div class="diag" id="diagPane"></div>
+  </div>
+</section>
+
+<!-- ================= 11.5 TOOLING ================= -->
+<section id="tooling">
+  <span class="section-tag">11.5 · Wire it up</span>
+  <h2>The observability stack, assembled</h2>
+  <p class="lede">Everything comes from services you configured in Chapters 8–9 — this is the assembly manual:</p>
+
+  <div class="codeblock"><pre><span class="c"># Emit quality metrics alongside the standard ones (Lambda, Ch. 8 handler)</span>
+cloudwatch.put_metric_data(
+    Namespace=<span class="s">"GenAI/ClaimsApp"</span>,
+    MetricData=[
+        {<span class="s">"MetricName"</span>: <span class="s">"OutputTokens"</span>,  <span class="s">"Value"</span>: usage[<span class="s">"outputTokens"</span>]},
+        {<span class="s">"MetricName"</span>: <span class="s">"SchemaValid"</span>,   <span class="s">"Value"</span>: 1 <span class="k">if</span> parsed_ok <span class="k">else</span> 0},
+        {<span class="s">"MetricName"</span>: <span class="s">"KBChunksUsed"</span>,  <span class="s">"Value"</span>: len(citations)},
+        {<span class="s">"MetricName"</span>: <span class="s">"ThumbsUp"</span>,      <span class="s">"Value"</span>: feedback}   <span class="c"># from the UI callback</span>
+    ])
+<span class="c"># Alarms: p95 TTFT &gt; 3s · SchemaValid &lt; 99% · guardrail interventions &gt; 3%
+# · groundedness sample &lt; 95% · token/request trending +20% week-over-week</span></pre></div>
+
+  <div class="grid">
+    <div class="card m-blue">
+      <h4>📜 Invocation logs (Ch. 9)</h4>
+      <p>The replay record: full prompts and responses in S3/CloudWatch. Every investigation starts here —
+      turn it on before you need it.</p>
+    </div>
+    <div class="card m-purple">
+      <h4>🔗 X-Ray traces (Ch. 8)</h4>
+      <p>One timeline across API Gateway → Lambda → KB retrieval → Bedrock → tools. Shows <em>where</em> the 12
+      seconds went and which agent step looped.</p>
+    </div>
+    <div class="card m-teal">
+      <h4>🤖 Agent traces (Ch. 5)</h4>
+      <p>Bedrock agent trace / AgentCore observability: every Think→Act→Observe step with tool inputs and outputs.
+      Non-negotiable for anything autonomous.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 11.6 ANTIPATTERNS ================= -->
+<section id="antipatterns">
+  <span class="section-tag">11.6 · Field guide</span>
+  <h2>Observability failures → quick fixes</h2>
+  <div class="panel" style="padding:0;overflow:hidden">
+    <div class="anti">
+      <div class="bad">Only infrastructure metrics — "the dashboards were all green"</div>
+      <div class="good">Add the quality tile: sampled groundedness + feedback rate + schema validity</div>
+      <div class="bad">Evaluating once, at launch</div>
+      <div class="good">Golden set in CI/CD + weekly sampled judging — quality is a time series, not a milestone</div>
+      <div class="bad">Trusting LLM-judge scores as absolute truth</div>
+      <div class="good">Calibrate the judge against human ratings quarterly; judges have biases too</div>
+      <div class="bad">Debugging from user screenshots</div>
+      <div class="good">Feedback linked to invocation-log IDs — replay the exact prompt, context, and response</div>
+      <div class="bad">One giant "AI quality" score nobody can act on</div>
+      <div class="good">Separate retrieval vs generation vs format metrics — each points at a different fix</div>
+      <div class="bad">Golden set frozen since launch</div>
+      <div class="good">Every production failure becomes a test case — the set grows with your scars</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= LAB ================= -->
+<section id="lab">
+  <div class="lab">
+    <h3>🧪 Hands-on lab (~75 min)</h3>
+    <p>1. Build the 11.1 dashboard for your Chapter 8 app: CloudWatch widgets for invocations, p95 latency,
+    token counts (from your inference profile), and guardrail interventions.</p>
+    <p>2. Write a 10-question golden set for your Chapter 4 Knowledge Base; run an
+    <strong>Amazon Bedrock Evaluation</strong> job (LLM-as-a-judge) against two different models and compare.</p>
+    <p>3. Seed one stale document into your KB, watch groundedness drop, then fix the source and re-sync —
+    the full quality loop, end to end.</p>
+    <p>4. Use the 11.4 triage table on a real failure from your invocation logs.</p>
+    <p>5. Deeper: <a href="https://docs.aws.amazon.com/bedrock/latest/userguide/evaluation.html" target="_blank" rel="noopener">Bedrock model evaluation docs</a> ·
+    <a href="https://docs.aws.amazon.com/bedrock/latest/userguide/monitoring.html" target="_blank" rel="noopener">Bedrock monitoring docs</a>.</p>
+  </div>
+</section>
+
+<!-- ================= RECAP ================= -->
+<section id="recap">
+  <div class="recap">
+    <h3>🎯 Chapter 11 takeaways</h3>
+    <ol>
+      <li><b>Quality is the fifth golden signal</b> — a GenAI app can be up, fast, and wrong. Instrument correctness like you instrument availability.</li>
+      <li>Offline: <b>golden test sets + LLM-as-a-judge</b> (Bedrock Evaluations), with retrieval scored separately from generation.</li>
+      <li>Online: feedback capture tied to invocation logs, <b>A/B canaries for prompts</b>, drift watching, and sampled deep review.</li>
+      <li>The flywheel: failure → replay → diagnose → fix → <b>add to the golden set</b> → gate releases.</li>
+      <li>Triage by symptom: wrong answers → retrieval first; ignored documents → grounding prompt + checks; broken JSON → schema validation + repair retry.</li>
+      <li>All of it assembles from what you already built: invocation logs (Ch. 9), X-Ray (Ch. 8), agent traces (Ch. 5), custom CloudWatch metrics.</li>
+    </ol>
+    <div class="nav-btns">
+      <a class="next-btn ghost" href="chapter-10-cost-performance.html">← Chapter 10: Cost &amp; Performance</a>
+      <a class="next-btn" href="chapter-12-capstone.html">Next → Chapter 12: The Capstone</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  AWS GenAI for IT Professionals · Chapter 11 of 12 · Evaluation features evolve — verify in the
+  <a href="https://docs.aws.amazon.com/bedrock/latest/userguide/evaluation.html" target="_blank" rel="noopener">Bedrock evaluation documentation</a>.
+</footer>
+
+<script>
+  // Scroll progress
+  const bar = document.getElementById('progress');
+  addEventListener('scroll', () => {
+    const h = document.documentElement;
+    bar.style.width = (h.scrollTop / (h.scrollHeight - h.clientHeight) * 100) + '%';
+  }, {passive:true});
+
+  // Reveal on scroll
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); } });
+  }, {threshold:.12});
+  document.querySelectorAll('.panel, .card').forEach((el, i) => {
+    el.style.transitionDelay = (i % 5) * 60 + 'ms';
+    io.observe(el);
+  });
+
+  // ---------- Judge demo ----------
+  const judged = {
+    good:   {s:[9.5,9.5,9,10], verdict:'pass', text:'✅ PASS (9.5/10) — grounded in SEC-VPN-007, complete, cited. Ships.'},
+    halluc: {s:[2,8,6,0],      verdict:'fail', text:'⛔ FAIL — relevant-sounding but ungrounded: "90 days automatic" appears nowhere in the retrieved excerpts. Classic hallucination: fluent, plausible, false.'},
+    offtopic:{s:[5,2,1,0],     verdict:'fail', text:'⛔ FAIL — factually fine, totally unresponsive: explains VPN technology instead of the extension policy. Relevance catches what groundedness misses.'}
+  };
+  function colorFor(v){ return v >= 8 ? '#3fb27f' : v >= 5 ? '#f0a94b' : '#e05252'; }
+  function setJudge(k){
+    const j = judged[k];
+    j.s.forEach((v, i) => {
+      const f = document.getElementById('jf'+i);
+      f.style.width = (v*10) + '%';
+      f.style.background = colorFor(v);
+      document.getElementById('js'+i).textContent = v;
+    });
+    const jv = document.getElementById('jVerdict');
+    jv.className = 'jverdict ' + j.verdict;
+    jv.textContent = j.text;
+    document.querySelectorAll('.jbtn').forEach(b =>
+      b.classList.toggle('active', b.dataset.j === k));
+  }
+  document.querySelectorAll('.jbtn').forEach(b =>
+    b.addEventListener('click', () => setJudge(b.dataset.j)));
+  setJudge('good');
+
+  // ---------- Triage ----------
+  const triage = [
+    [{c:'check', t:'First check', d:'Pull the invocation log for a failing case. Did the retrieved chunks actually contain the right answer?', r:'Ch. 9 · logs'},
+     {c:'cause', t:'Usual suspects', d:'Retrieval miss (wrong chunks) ~60% of the time; prompt ambiguity ~25%; genuinely-too-hard-for-this-model ~15%.', r:'Ch. 4 · Ch. 3 · Ch. 2'},
+     {c:'fix',   t:'Fix in order', d:'Tune chunking/hybrid search → clarify the prompt with examples → only then try a bigger model.', r:'cheapest fix first'}],
+    [{c:'check', t:'First check', d:'Is the grounding instruction present? Look for "Answer ONLY from the excerpts" in the assembled prompt — not just in the template you think is deployed.', r:'Ch. 4 · Ch. 3'},
+     {c:'cause', t:'Usual suspects', d:'Prompt drift between environments; contextual grounding check not enabled; retrieved context arriving empty (silent KB sync failure).', r:'Ch. 6 · grounding'},
+     {c:'fix',   t:'Fix', d:'Pin prompt versions (Prompt Management), enable grounding checks, alarm on zero-citation responses.', r:'Ch. 3 · Ch. 6 · Ch. 11'}],
+    [{c:'check', t:'First check', d:'What fraction fails? Look at your SchemaValid metric — 1% is prompt wobble, 30% is a prompt or model change.', r:'Ch. 11 · metrics'},
+     {c:'cause', t:'Usual suspects', d:'Temperature too high for structured output; missing "JSON only, no other text"; model swap changed formatting habits.', r:'Ch. 2 · Ch. 3'},
+     {c:'fix',   t:'Fix', d:'Temperature ≤0.2 for structured tasks, schema in the prompt, validate + one repair retry ("your last output was invalid JSON…").', r:'Ch. 8 · robust_invoke'}],
+    [{c:'check', t:'First check', d:'Token count per turn in the logs — is the conversation window growing unbounded until it crowds out the system prompt?', r:'Ch. 9 · Ch. 10'},
+     {c:'cause', t:'Usual suspects', d:'Full-history replay (context overflow truncates your instructions first); stale summary; contradictory turns accumulating.', r:'Ch. 8 · memory'},
+     {c:'fix',   t:'Fix', d:'Sliding window + running summary, re-assert the system prompt each call, cap session length with a graceful "let\'s start fresh."', r:'Ch. 8 §8.4'}],
+    [{c:'check', t:'First check', d:'CloudWatch throttle metrics vs your tokens-per-minute quota — burst pattern or sustained ceiling?', r:'Ch. 8 · quotas'},
+     {c:'cause', t:'Usual suspects', d:'Parallel fan-out spending TPM faster than expected; batch-shaped work on the on-demand API; genuine growth.', r:'Ch. 10'},
+     {c:'fix',   t:'Fix', d:'Backoff+jitter (already built in Ch. 8), move async work to batch, cross-region inference for burst, provisioned throughput for the steady base.', r:'Ch. 2 · Ch. 10'}],
+    [{c:'check', t:'First check', d:'Diff everything with a timestamp: KB sync history, prompt versions, model updates, document changes. "Nothing changed" is always false.', r:'Ch. 9 · CloudTrail'},
+     {c:'cause', t:'Usual suspects', d:'A re-synced document source (someone reorganized the wiki), a silent model version update, or question drift into topics your KB lacks.', r:'Ch. 11 · drift'},
+     {c:'fix',   t:'Fix', d:'Golden set against the previous config to isolate the layer; pin model versions where supported; add the new failure cases to the set.', r:'the flywheel'}]
+  ];
+  const diagPane = document.getElementById('diagPane');
+  function setTriage(i){
+    diagPane.innerHTML = triage[i].map(s =>
+      `<div class="dstep ${s.c}"><b>${s.t}</b><span>${s.d}</span><br><span class="ref">→ ${s.r}</span></div>`).join('');
+    document.querySelectorAll('.sbtn').forEach(b =>
+      b.classList.toggle('active', +b.dataset.s === i));
+  }
+  document.querySelectorAll('.sbtn').forEach(b =>
+    b.addEventListener('click', () => setTriage(+b.dataset.s)));
+  setTriage(0);
+</script>
+</body>
+</html>
